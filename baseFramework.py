@@ -88,7 +88,7 @@ class DraggableBlock(tk.Frame):
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
             combo = ttk.Combobox(dropdown_row, font=("Arial", 10), state="disabled")
             if base_key == "marketStage":
-                combo.set("Product Market Fit: ARR 30%+")
+                combo.set("Rule of 40: Growth + Margin >= 40%")
             else:
                 combo.set("")  # Leave blank for all other dropdowns
 
@@ -214,7 +214,7 @@ class StockScreenerApp:
             ("Lower Volume", lambda: self.set_parameter("volumeMoreThan", float)),
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Limit Results", lambda: self.set_parameter("limit", int)),
-            ("Market Stage", lambda: self.open_dropdown("marketStage", ["Product Market Fit: ARR 30%+"]))
+            ("Market Stage", lambda: self.open_dropdown("marketStage", ["Rule of 40: Growth + Margin >= 40%"]))
         ]
 
         categories = {
@@ -299,7 +299,7 @@ class StockScreenerApp:
             "isFund": ["true", "false"],
             "isActivelyTrading": ["true", "false"],
             "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Product Market Fit: ARR 30%+"]
+            "marketStage": ["Rule of 40: Growth + Margin >= 40%"]
 
         }
 
@@ -357,7 +357,7 @@ class StockScreenerApp:
             "isFund": ["true", "false"],
             "isActivelyTrading": ["true", "false"],
             "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Product Market Fit: ARR 30%+"]
+            "marketStage": ["Rule of 40: Growth + Margin >= 40%"]
         }
 
         block_frame = tk.Frame(self.snap_zone, bg="white", relief='solid', bd=1, width=300, height=80)
@@ -659,11 +659,14 @@ class StockScreenerApp:
                         return symbol, self._income_cache[symbol]
 
                     try:
-                        url = f"https://financialmodelingprep.com/api/v3/income-statement/{symbol}?period=quarter&limit=3&apikey={self.api_key}"
+                        url = (
+                            f"https://financialmodelingprep.com/api/v3/income-statement/"
+                            f"{symbol}?period=annual&limit=2&apikey={self.api_key}"
+                        )
                         data = requests.get(url, timeout=3).json()
                         self._income_cache[symbol] = data  # Store in cache
                         return symbol, data
-                    except:
+                    except Exception:
                         return symbol, []
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
@@ -678,13 +681,13 @@ class StockScreenerApp:
                     for stock in screener_data:
                         symbol = stock["symbol"]
                         income_data = income_results.get(symbol, [])
-                        
-                        if len(income_data) < 3:
+
+                        if len(income_data) < 2:
                             continue
 
                         try:
                             current = income_data[0]
-                            prev = income_data[-1]
+                            prev = income_data[1]
 
                             rev_now = float(current.get("revenue") or 0)
                             rev_last = float(prev.get("revenue") or 0)

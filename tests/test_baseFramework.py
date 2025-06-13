@@ -11,6 +11,5 @@ def test_get_param_key_from_label():
     assert app.get_param_key_from_label("Lower Price") == "priceMoreThan"
     assert app.get_param_key_from_label("Sector") == "sector"
     assert app.get_param_key_from_label("Stock Search") == "stockSearch"
-    # Unknown labels should be returned as-is
     assert app.get_param_key_from_label("Unknown") == "Unknown"
 
