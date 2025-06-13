@@ -563,157 +563,126 @@ class StockScreenerApp:
             response = requests.get(url)
             data = response.json()
 
-            # Clear old tiles
-            for widget in self.results_frame.winfo_children():
-                widget.destroy()
+            if any("marketStage" in k for k in self.params):
+                base_screen_url = self.base_url + '&'.join(
+                    f"{key}={str(val).lower() if isinstance(val, bool) else val}"
+                    for key, val in self.params.items()
+                    if key != "marketStage" and val not in ["", None]
+                )
+                base_screen_url += f"&apikey={self.api_key}&limit=100"
 
-            self.root.after(50, lambda: self.results_canvas.yview_moveto(0))
+                try:
+                    response = requests.get(base_screen_url)
+                    screener_data = response.json()
 
-            if isinstance(data, list) and data:
-                symbols = [item.get("symbol", "") for item in data if "symbol" in item]
-                quote_url = f"{self.quote_url}{','.join(symbols)}?apikey={self.api_key}"
-                quote_data = requests.get(quote_url).json()
-                quote_map = {q["symbol"]: q for q in quote_data if "symbol" in q}
+                    matching_stocks = []
+                    import concurrent.futures
 
-                for item in data:
-                    symbol = item.get('symbol', 'N/A')
-                    quote = quote_map.get(symbol, {})
-                    name = item.get('name') or quote.get('name', 'Unknown Company')
-                    price = quote.get('price', 0)
-                    change = quote.get('changesPercentage', 0)
+                    def fetch_income(symbol):
+                        if symbol in self._income_cache:
+                            return symbol, self._income_cache[symbol]
 
-                    price_color = "green" if change >= 0 else "red"
+                        try:
+                            url = (
+                                f"https://financialmodelingprep.com/api/v3/income-statement/"
+                                f"{symbol}?period=quarter&limit=6&apikey={self.api_key}"
+                            )
+                            data = requests.get(url, timeout=3).json()
+                            self._income_cache[symbol] = data
+                            return symbol, data
+                        except Exception:
+                            return symbol, []
 
-                    # Main container tile
-                    frame = tk.Frame(self.results_frame, bd=1, relief="solid", bg="white")
-                    frame.pack(padx=8, pady=6, fill="x")
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+                        futures = [executor.submit(fetch_income, stock["symbol"]) for stock in screener_data]
+                        income_results = {}
+                        for future in concurrent.futures.as_completed(futures):
+                            symbol, inc_data = future.result()
+                            if inc_data:
+                                income_results[symbol] = inc_data
 
-                    # Remove button
-                    remove_btn = tk.Button(frame, text="✖", font=("Arial", 10), fg="red", bg="white", relief="flat",
-                                        command=lambda f=frame: f.destroy())
-                    remove_btn.place(relx=1.0, x=-16, y=4, anchor="ne")
+                        for stock in screener_data:
+                            symbol = stock["symbol"]
+                            income_data = income_results.get(symbol, [])
 
-                    # Dropdown frame (hidden by default)
-                    dropdown_frame = [None]  # Placeholder for lazy creation
+                            if len(income_data) < 5:
+                                continue
 
-                    def toggle_dropdown(dropdown_list, container, btn, symbol, quote):
-                        if dropdown_list[0] is None:
-                            price_history = self.get_historical_prices(symbol)
-                            dropdown = ResultDropdown(container, symbol=symbol, quote_data=quote, price_history=price_history)
-                            dropdown.pack(fill="x", padx=10, pady=(5, 10))
-                            dropdown_list[0] = dropdown
-                            btn.config(text="▲")
-                        else:
-                            if dropdown_list[0].winfo_ismapped():
-                                dropdown_list[0].pack_forget()
-                                btn.config(text="▼")
-                            else:
-                                dropdown_list[0].pack(fill="x", padx=10, pady=(5, 10))
-                                btn.config(text="▲")
+                            try:
+                                q0, q1, q2, q3, q4 = income_data[:5]
 
-                    # Row 1: Ticker and Price
-                    top_row = tk.Frame(frame, bg="white")
-                    top_row.pack(fill="x", padx=10, pady=(5, 0))
+                                rev0 = float(q0.get("revenue") or 0)
+                                rev1 = float(q1.get("revenue") or 0)
+                                rev2 = float(q2.get("revenue") or 0)
+                                rev3 = float(q3.get("revenue") or 0)
+                                rev4 = float(q4.get("revenue") or 0)
 
-                    tk.Label(top_row, text=symbol, font=("Arial", 18, "bold"), fg="black", bg="white").pack(side="left")
-                    tk.Label(top_row, text=f"{price:.2f}", font=("Arial", 18, "bold"), fg=price_color, bg="white").pack(side="right")
+                                net0 = float(q0.get("netIncome") or 0)
+                                net1 = float(q1.get("netIncome") or 0)
 
-                    # Row 2: Company name + dropdown toggle
-                    bottom_row = tk.Frame(frame, bg="white")
-                    bottom_row.pack(fill="x", padx=10, pady=(3, 8))
+                                if any(v == 0 for v in [rev0, rev1, rev2, rev3, rev4]):
+                                    continue
 
-                    tk.Label(bottom_row, text=name, font=("Arial", 9), fg="gray", bg="white",
-                            justify="left", anchor="w").pack(side="left", fill="x", expand=True)
+                                growth0 = (rev0 - rev1) / rev1 * 100
+                                growth1 = (rev1 - rev2) / rev2 * 100
+                                margin0 = (net0 / rev0) * 100
+                                margin1 = (net1 / rev1) * 100
 
-                    toggle_btn = tk.Button(bottom_row, text="▼", font=("Arial", 10), bg="white", relief="flat")
-                    toggle_btn.pack(side="right")
-                    toggle_btn.config(command=lambda btn=toggle_btn, df=dropdown_frame, f=frame, s=symbol, q=quote: toggle_dropdown(df, f, btn, s, q))
+                                rule40_avg = ((growth0 + margin0) + (growth1 + margin1)) / 2
 
-            else:
-                tk.Label(
-                    self.results_frame,
-                    text="No results found or error in response.",
-                    bg="white", fg="gray", font=("Arial", 11, "italic")
-                ).pack(pady=20)
+                                flat_prev1 = (rev2 - rev3) / rev3 * 100
+                                flat_prev2 = (rev3 - rev4) / rev4 * 100
+
+                                if (
+                                    rule40_avg >= 40
+                                    and abs(flat_prev1) <= 5
+                                    and abs(flat_prev2) <= 5
+                                ):
+                                    matching_stocks.append(stock)
+                                    if len(matching_stocks) >= 20:
+                                        break
+
+                            except Exception:
+                                continue
+
+                    data = matching_stocks
+
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed Market Stage filter:\n{e}")
+                    return
+
+
+            self.render_results(data)
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to fetch data:\n{e}")
 
-        if any("marketStage" in k for k in self.params):
-            base_screen_url = self.base_url + '&'.join(
-                f"{key}={str(val).lower() if isinstance(val, bool) else val}"
-                for key, val in self.params.items()
-                if key != "marketStage" and val not in ["", None]
-            )
-            base_screen_url += f"&apikey={self.api_key}&limit=100"
+    def render_results(self, data):
+        # Clear old tiles
+        for widget in self.results_frame.winfo_children():
+            widget.destroy()
 
-            try:
-                response = requests.get(base_screen_url)
-                screener_data = response.json()
+        self.root.after(50, lambda: self.results_canvas.yview_moveto(0))
 
-                matching_stocks = []
-                import concurrent.futures
+        if isinstance(data, list) and data:
+            symbols = [item.get("symbol", "") for item in data if "symbol" in item]
+            quote_url = f"{self.quote_url}{','.join(symbols)}?apikey={self.api_key}"
+            quote_data = requests.get(quote_url).json()
+            quote_map = {q["symbol"]: q for q in quote_data if "symbol" in q}
 
-                def fetch_income(symbol):
-                    if symbol in self._income_cache:
-                        return symbol, self._income_cache[symbol]
-
-                    try:
-                        url = (
-                            f"https://financialmodelingprep.com/api/v3/income-statement/"
-                            f"{symbol}?period=annual&limit=2&apikey={self.api_key}"
-                        )
-                        data = requests.get(url, timeout=3).json()
-                        self._income_cache[symbol] = data  # Store in cache
-                        return symbol, data
-                    except Exception:
-                        return symbol, []
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-                    futures = [executor.submit(fetch_income, stock["symbol"]) for stock in screener_data]
-                    income_results = {}
-                    for future in concurrent.futures.as_completed(futures):
-                        symbol, data = future.result()
-                        if data:
-                            income_results[symbol] = data
-
-                    matching_stocks = []
-                    for stock in screener_data:
-                        symbol = stock["symbol"]
-                        income_data = income_results.get(symbol, [])
-
-                        if len(income_data) < 2:
-                            continue
-
-                        try:
-                            current = income_data[0]
-                            prev = income_data[1]
-
-                            rev_now = float(current.get("revenue") or 0)
-                            rev_last = float(prev.get("revenue") or 0)
-                            net_now = float(current.get("netIncome") or 0)
-
-                            if rev_now == 0 or rev_last == 0:
-                                continue
-
-                            yoy_growth = (rev_now - rev_last) / rev_last * 100
-                            profit_margin = (net_now / rev_now) * 100
-                            rule40_score = yoy_growth + profit_margin
-
-                            if rule40_score >= 40:
-                                matching_stocks.append(stock)
-                                if len(matching_stocks) >= 20:
-                                    break
-
-                        except Exception:
-                            continue
-
-                data = matching_stocks
-
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed Market Stage filter:\n{e}")
-                return
-
+            for item in data:
+                symbol = item.get('symbol', 'N/A')
+                quote = quote_map.get(symbol, {})
+                # prefer name from item when available
+                if item.get('name'):
+                    quote = {**quote, 'name': item['name']}
+                self.render_stock_tile(symbol, quote)
+        else:
+            tk.Label(
+                self.results_frame,
+                text="No results found or error in response.",
+                bg="white", fg="gray", font=("Arial", 11, "italic")
+            ).pack(pady=20)
 
     def get_historical_prices(self, symbol):
         try:
