@@ -3,7 +3,6 @@ from tkinter import simpledialog, messagebox, Toplevel, filedialog
 from tkinter import ttk
 import requests
 import json
-import os
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from datetime import datetime
@@ -304,7 +303,7 @@ class StockScreenerApp:
 
         }
 
-        frame = tk.Frame(parent, bg="white", relief='solid', bd=1, width=300, height=80)  # CHANGE THE BORDER FOR FIRST STAGE SEARCH TILES
+        frame = tk.Frame(parent, bg="white", relief='solid', bd=1, width=300, height=80)  # Container for filter preview blocks
         frame.pack_propagate(False)
 
         title_row = tk.Frame(frame, bg="white")
@@ -726,7 +725,7 @@ class StockScreenerApp:
                     for item in reversed(data)]
         except Exception as e:
             print(f"[ERROR] Failed to fetch history for {symbol}: {e}")
-            return [(datetime.strptime(item["date"], "%Y-%m-%d %H:%M:%S"), item["close"]) for item in reversed(data)]
+            return []
 
     def render_stock_tile(self, symbol, quote_data, parent=None):
         if parent is None:
@@ -739,22 +738,7 @@ class StockScreenerApp:
 
         frame = tk.Frame(parent, bd=1, relief="solid", bg="white")
         frame.pack(padx=8, pady=6, fill="x")
-        #self.result_tiles[symbol] = frame
-        # Clear old results
-        for frame in self.result_tiles.values():
-            frame.destroy()
-        self.result_tiles.clear()
-
-        # Render fresh tiles
-        if isinstance(data, list) and data:
-            symbols = [item.get("symbol", "") for item in data if "symbol" in item]
-            quote_url = f"{self.quote_url}{','.join(symbols)}?apikey={self.api_key}"
-            quote_data = requests.get(quote_url).json()
-            quote_map = {q["symbol"]: q for q in quote_data if "symbol" in q}
-
-            for symbol in symbols:
-                quote = quote_map.get(symbol, {})
-                self.render_stock_tile(symbol, quote)
+        self.result_tiles[symbol] = frame
 
         # Remove button
         remove_btn = tk.Button(frame, text="✖", font=("Arial", 10), fg="red", bg="white", relief="flat",
