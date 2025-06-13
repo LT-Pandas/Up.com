@@ -636,7 +636,8 @@ class StockScreenerApp:
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed Market Stage filter:\n{e}")
                     return
-                  
+
+
             self.render_results(data)
 
         except Exception as e:
