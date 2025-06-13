@@ -1,12 +1,22 @@
 import tkinter as tk
 from tkinter import simpledialog, messagebox, Toplevel, filedialog
 from tkinter import ttk
-import requests
+try:
+    import requests
+except Exception:  # pragma: no cover - optional dependency for tests
+    class _RequestsStub:
+        def get(self, *a, **k):
+            raise ModuleNotFoundError("requests is required to fetch remote data")
+
+    requests = _RequestsStub()
 import json
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
+try:
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    from matplotlib.figure import Figure
+    import matplotlib.dates as mdates
+except Exception:  # pragma: no cover - optional dependency for tests
+    FigureCanvasTkAgg = Figure = mdates = None
 from datetime import datetime
-import matplotlib.dates as mdates
 
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
@@ -585,7 +595,7 @@ class StockScreenerApp:
                         try:
                             url = (
                                 f"https://financialmodelingprep.com/api/v3/income-statement/"
-                                f"{symbol}?period=annual&limit=2&apikey={self.api_key}"
+                                f"{symbol}?period=quarter&limit=6&apikey={self.api_key}"
                             )
                             data = requests.get(url, timeout=3).json()
                             self._income_cache[symbol] = data
@@ -605,25 +615,39 @@ class StockScreenerApp:
                             symbol = stock["symbol"]
                             income_data = income_results.get(symbol, [])
 
-                            if len(income_data) < 2:
+                            if len(income_data) < 5:
                                 continue
 
                             try:
-                                current = income_data[0]
-                                prev = income_data[1]
+                                q0, q1, q2, q3, q4 = income_data[:5]
 
-                                rev_now = float(current.get("revenue") or 0)
-                                rev_last = float(prev.get("revenue") or 0)
-                                net_now = float(current.get("netIncome") or 0)
+                                rev0 = float(q0.get("revenue") or 0)
+                                rev1 = float(q1.get("revenue") or 0)
+                                rev2 = float(q2.get("revenue") or 0)
+                                rev3 = float(q3.get("revenue") or 0)
+                                rev4 = float(q4.get("revenue") or 0)
 
-                                if rev_now == 0 or rev_last == 0:
+                                net0 = float(q0.get("netIncome") or 0)
+                                net1 = float(q1.get("netIncome") or 0)
+
+                                if any(v == 0 for v in [rev0, rev1, rev2, rev3, rev4]):
                                     continue
 
-                                yoy_growth = (rev_now - rev_last) / rev_last * 100
-                                profit_margin = (net_now / rev_now) * 100
-                                rule40_score = yoy_growth + profit_margin
+                                growth0 = (rev0 - rev1) / rev1 * 100
+                                growth1 = (rev1 - rev2) / rev2 * 100
+                                margin0 = (net0 / rev0) * 100
+                                margin1 = (net1 / rev1) * 100
 
-                                if rule40_score >= 40:
+                                rule40_avg = ((growth0 + margin0) + (growth1 + margin1)) / 2
+
+                                flat_prev1 = (rev2 - rev3) / rev3 * 100
+                                flat_prev2 = (rev3 - rev4) / rev4 * 100
+
+                                if (
+                                    rule40_avg >= 40
+                                    and abs(flat_prev1) <= 5
+                                    and abs(flat_prev2) <= 5
+                                ):
                                     matching_stocks.append(stock)
                                     if len(matching_stocks) >= 20:
                                         break
@@ -636,7 +660,7 @@ class StockScreenerApp:
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed Market Stage filter:\n{e}")
                     return
-                  
+
             self.render_results(data)
 
         except Exception as e:
