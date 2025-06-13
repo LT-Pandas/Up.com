@@ -1,12 +1,22 @@
 import tkinter as tk
 from tkinter import simpledialog, messagebox, Toplevel, filedialog
 from tkinter import ttk
-import requests
+try:
+    import requests
+except Exception:  # pragma: no cover - optional dependency for tests
+    class _RequestsStub:
+        def get(self, *a, **k):
+            raise ModuleNotFoundError("requests is required to fetch remote data")
+
+    requests = _RequestsStub()
 import json
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
+try:
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    from matplotlib.figure import Figure
+    import matplotlib.dates as mdates
+except Exception:  # pragma: no cover - optional dependency for tests
+    FigureCanvasTkAgg = Figure = mdates = None
 from datetime import datetime
-import matplotlib.dates as mdates
 
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
