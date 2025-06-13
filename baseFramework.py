@@ -3,7 +3,6 @@ from tkinter import simpledialog, messagebox, Toplevel, filedialog
 from tkinter import ttk
 import requests
 import json
-import os
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from datetime import datetime
@@ -89,7 +88,7 @@ class DraggableBlock(tk.Frame):
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
             combo = ttk.Combobox(dropdown_row, font=("Arial", 10), state="disabled")
             if base_key == "marketStage":
-                combo.set("Product Market Fit: ARR 30%+")
+                combo.set("Rule of 40: Growth + Margin >= 40%")
             else:
                 combo.set("")  # Leave blank for all other dropdowns
 
@@ -215,7 +214,7 @@ class StockScreenerApp:
             ("Lower Volume", lambda: self.set_parameter("volumeMoreThan", float)),
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Limit Results", lambda: self.set_parameter("limit", int)),
-            ("Market Stage", lambda: self.open_dropdown("marketStage", ["Product Market Fit: ARR 30%+"]))
+            ("Market Stage", lambda: self.open_dropdown("marketStage", ["Rule of 40: Growth + Margin >= 40%"]))
         ]
 
         categories = {
@@ -300,11 +299,11 @@ class StockScreenerApp:
             "isFund": ["true", "false"],
             "isActivelyTrading": ["true", "false"],
             "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Product Market Fit: ARR 30%+"]
+            "marketStage": ["Rule of 40: Growth + Margin >= 40%"]
 
         }
 
-        frame = tk.Frame(parent, bg="white", relief='solid', bd=1, width=300, height=80)  # CHANGE THE BORDER FOR FIRST STAGE SEARCH TILES
+        frame = tk.Frame(parent, bg="white", relief='solid', bd=1, width=300, height=80)  # Container for filter preview blocks
         frame.pack_propagate(False)
 
         title_row = tk.Frame(frame, bg="white")
@@ -358,7 +357,7 @@ class StockScreenerApp:
             "isFund": ["true", "false"],
             "isActivelyTrading": ["true", "false"],
             "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Product Market Fit: ARR 30%+"]
+            "marketStage": ["Rule of 40: Growth + Margin >= 40%"]
         }
 
         block_frame = tk.Frame(self.snap_zone, bg="white", relief='solid', bd=1, width=300, height=80)
@@ -660,11 +659,14 @@ class StockScreenerApp:
                         return symbol, self._income_cache[symbol]
 
                     try:
-                        url = f"https://financialmodelingprep.com/api/v3/income-statement/{symbol}?period=quarter&limit=3&apikey={self.api_key}"
+                        url = (
+                            f"https://financialmodelingprep.com/api/v3/income-statement/"
+                            f"{symbol}?period=annual&limit=2&apikey={self.api_key}"
+                        )
                         data = requests.get(url, timeout=3).json()
                         self._income_cache[symbol] = data  # Store in cache
                         return symbol, data
-                    except:
+                    except Exception:
                         return symbol, []
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
@@ -679,13 +681,13 @@ class StockScreenerApp:
                     for stock in screener_data:
                         symbol = stock["symbol"]
                         income_data = income_results.get(symbol, [])
-                        
-                        if len(income_data) < 3:
+
+                        if len(income_data) < 2:
                             continue
 
                         try:
                             current = income_data[0]
-                            prev = income_data[-1]
+                            prev = income_data[1]
 
                             rev_now = float(current.get("revenue") or 0)
                             rev_last = float(prev.get("revenue") or 0)
@@ -726,7 +728,7 @@ class StockScreenerApp:
                     for item in reversed(data)]
         except Exception as e:
             print(f"[ERROR] Failed to fetch history for {symbol}: {e}")
-            return [(datetime.strptime(item["date"], "%Y-%m-%d %H:%M:%S"), item["close"]) for item in reversed(data)]
+            return []
 
     def render_stock_tile(self, symbol, quote_data, parent=None):
         if parent is None:
@@ -739,22 +741,7 @@ class StockScreenerApp:
 
         frame = tk.Frame(parent, bd=1, relief="solid", bg="white")
         frame.pack(padx=8, pady=6, fill="x")
-        #self.result_tiles[symbol] = frame
-        # Clear old results
-        for frame in self.result_tiles.values():
-            frame.destroy()
-        self.result_tiles.clear()
-
-        # Render fresh tiles
-        if isinstance(data, list) and data:
-            symbols = [item.get("symbol", "") for item in data if "symbol" in item]
-            quote_url = f"{self.quote_url}{','.join(symbols)}?apikey={self.api_key}"
-            quote_data = requests.get(quote_url).json()
-            quote_map = {q["symbol"]: q for q in quote_data if "symbol" in q}
-
-            for symbol in symbols:
-                quote = quote_map.get(symbol, {})
-                self.render_stock_tile(symbol, quote)
+        self.result_tiles[symbol] = frame
 
         # Remove button
         remove_btn = tk.Button(frame, text="✖", font=("Arial", 10), fg="red", bg="white", relief="flat",
