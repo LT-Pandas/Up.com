@@ -93,6 +93,7 @@ class DraggableBlock(tk.Frame):
         drop_y1 = drop_y0 + self.drop_target.winfo_height()
 
         dropped_in_zone = drop_x0 <= abs_x <= drop_x1 and drop_y0 <= abs_y <= drop_y1
+
         label = self.preview_block._param_label
 
         target_container = None
@@ -112,6 +113,7 @@ class DraggableBlock(tk.Frame):
                 self.app.load_algorithm(label)
             else:
                 self.app.add_filter_block(label, container=target_container)
+
 
         # Destroy immediately after drawing (or skipping drop)
         if self._drag_window:
@@ -456,6 +458,7 @@ class StockScreenerApp:
         return frame
 
     def _create_filter_block(self, canvas, order_list, label, value=None):
+
         base_key = self.get_param_key_from_label(label)
 
         # Assign a unique key within this container/workspace
@@ -684,6 +687,57 @@ class StockScreenerApp:
         for c in list(self.containers):
             c.destroy()
         self.containers.clear()
+        self.params.clear()
+
+        for key, value in params.items():
+            label = self.get_label_from_param_key(key)
+            self.add_filter_block(label, value)
+
+        self.reposition_snap_zone()
+        self.update_display()
+
+    def open_save_algorithm_dialog(self):
+        if not self.params:
+            messagebox.showinfo("Save Algorithm", "Add filters to the workspace first.")
+            return
+
+        top = Toplevel(self.root)
+        top.title("Save Algorithm")
+        top.geometry("300x120")
+
+        tk.Label(top, text="Algorithm Name:").pack(pady=(10,0), padx=10, anchor="w")
+        name_entry = tk.Entry(top)
+        name_entry.pack(padx=10, fill="x")
+        name_entry.focus()
+
+        def submit():
+            name = name_entry.get().strip()
+            if not name:
+                return
+            self.saved_algorithms[name] = dict(self.params)
+            self._add_algorithm_preview(name)
+            top.destroy()
+
+        tk.Button(top, text="Save", command=submit).pack(pady=10)
+
+    def _add_algorithm_preview(self, name):
+        frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
+        frame.pack_propagate(False)
+        tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white").pack(fill="both", expand=True)
+
+        frame._param_label = name
+        DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
+        frame.pack(pady=4)
+
+    def load_algorithm(self, name):
+        params = self.saved_algorithms.get(name)
+        if not params:
+            return
+
+        # Clear existing workspace
+        for _, frame in self.snap_order:
+            frame.destroy()
+        self.snap_order.clear()
         self.params.clear()
 
         for key, value in params.items():
