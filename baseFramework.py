@@ -38,6 +38,12 @@ LABEL_TO_KEY = {
     "Is ETF?": "isEtf",
     "Is Fund?": "isFund",
     "Market Stage": "marketStage",
+    "YoY Growth (%)": "yoyGrowth",
+    "Profit Margin (%)": "profitMargin",
+    "R&D Ratio (%)": "rdRatio",
+    "Company Age (yrs)": "companyAge",
+    "Rule of 40": "ruleOf40",
+    "MVP Stage": "mvpStage",
     # Misc Filters
     "Stock Search": "stockSearch",
     "Limit Results": "limit",
@@ -323,6 +329,12 @@ class StockScreenerApp:
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Limit Results", lambda: self.set_parameter("limit", int)),
             ("Market Stage", lambda: self.open_dropdown("marketStage", ["Rule of 40: Growth + Margin >= 40%"]))
+            ,("YoY Growth (%)",    lambda: self.open_dropdown("yoyGrowth", ["Annual", "Quarterly"]))
+            ,("Profit Margin (%)", lambda: self.open_dropdown("profitMargin", ["Annual", "Quarterly"]))
+            ,("R&D Ratio (%)",     lambda: self.open_dropdown("rdRatio", ["Annual", "Quarterly"]))
+            ,("Company Age (yrs)", lambda: self.open_parameter("companyAge", int))
+            ,("Rule of 40",        lambda: self.open_dropdown("ruleOf40", ["≥ 40"]))
+            ,("MVP Stage",         lambda: self.open_dropdown("mvpStage", ["Pre-product","Early Product","Scaling"]))
         ]
 
         categories = {
@@ -416,7 +428,13 @@ class StockScreenerApp:
             "isFund": ["true", "false"],
             "isActivelyTrading": ["true", "false"],
             "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Rule of 40: Growth + Margin >= 40%"]
+            "marketStage": ["Rule of 40: Growth + Margin >= 40%"],
+            "yoyGrowth": ["Annual", "Quarterly"],
+            "profitMargin": ["Annual", "Quarterly"],
+            "rdRatio": ["Annual", "Quarterly"],
+            "companyAge": None,
+            "ruleOf40": ["≥ 40"],
+            "mvpStage": ["Pre-product", "Early Product", "Scaling"]
 
         }
 
@@ -431,9 +449,14 @@ class StockScreenerApp:
             dropdown_row = tk.Frame(frame, bg="white")
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
             options = options_map[base_key]
-            combo = ttk.Combobox(dropdown_row, values=options, font=("Arial", 10), state="disabled")
-            combo.set('') #combo.set(options[0])
-            combo.pack(side="left", fill="x", expand=True)
+            if options is None:
+                entry = tk.Entry(dropdown_row, font=("Arial", 10), state="disabled")
+                entry.insert(0, "")
+                entry.pack(side="left", fill="x", expand=True)
+            else:
+                combo = ttk.Combobox(dropdown_row, values=options, font=("Arial", 10), state="disabled")
+                combo.set('')
+                combo.pack(side="left", fill="x", expand=True)
 
         elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "beta", "dividend", "limit"]):
             slider_row = tk.Frame(frame, bg="white")
@@ -475,7 +498,13 @@ class StockScreenerApp:
             "isFund": ["true", "false"],
             "isActivelyTrading": ["true", "false"],
             "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Rule of 40: Growth + Margin >= 40%"]
+            "marketStage": ["Rule of 40: Growth + Margin >= 40%"],
+            "yoyGrowth": ["Annual", "Quarterly"],
+            "profitMargin": ["Annual", "Quarterly"],
+            "rdRatio": ["Annual", "Quarterly"],
+            "companyAge": None,
+            "ruleOf40": ["≥ 40"],
+            "mvpStage": ["Pre-product", "Early Product", "Scaling"]
         }
 
         block_frame = tk.Frame(canvas, bg="white", relief='solid', bd=1, width=300, height=80)
@@ -496,21 +525,38 @@ class StockScreenerApp:
             dropdown_row = tk.Frame(block_frame, bg="white")
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
 
-            combo = ttk.Combobox(dropdown_row, values=options_map[base_key], font=("Arial", 10), state="readonly")
-            combo.set(value if value is not None else "")
-            combo.pack(side="left", fill="x", expand=True)
+            opts = options_map[base_key]
+            if opts is None:
+                entry = tk.Entry(dropdown_row, font=("Arial", 10))
+                entry.pack(side="left", fill="x", expand=True)
+                if value is not None:
+                    entry.insert(0, str(value))
+                    self.params[key] = value
 
-            def update_selection(event):
-                selected = combo.get()
-                if selected:
-                    self.params[key] = selected
-                else:
-                    self.params.pop(key, None)
-                self.delayed_search()  # use this instead of update_display()
+                def on_return(event):
+                    try:
+                        self.params[key] = int(entry.get())
+                    except ValueError:
+                        self.params.pop(key, None)
+                    self.delayed_search()
 
-            combo.bind("<<ComboboxSelected>>", update_selection)
-            if value is not None:
-                self.params[key] = value
+                entry.bind("<Return>", on_return)
+            else:
+                combo = ttk.Combobox(dropdown_row, values=opts, font=("Arial", 10), state="readonly")
+                combo.set(value if value is not None else "")
+                combo.pack(side="left", fill="x", expand=True)
+
+                def update_selection(event):
+                    selected = combo.get()
+                    if selected:
+                        self.params[key] = selected
+                    else:
+                        self.params.pop(key, None)
+                    self.delayed_search()  # use this instead of update_display()
+
+                combo.bind("<<ComboboxSelected>>", update_selection)
+                if value is not None:
+                    self.params[key] = value
 
         elif base_key == "stockSearch":
             search_row = tk.Frame(block_frame, bg="white")
@@ -766,6 +812,28 @@ class StockScreenerApp:
 
         tk.Button(top, text="OK", command=submit_selection).pack(pady=5)
 
+    def open_parameter(self, key, value_type):
+        def submit_value():
+            try:
+                val = value_type(entry.get())
+                self.params[key] = val
+                self.add_filter_block(self.get_label_from_param_key(key), val)
+                self.update_display()
+            except Exception:
+                pass
+            top.destroy()
+
+        top = Toplevel(self.root)
+        top.title(f"Enter {key}")
+        top.geometry("300x100")
+        tk.Label(top, text=f"Enter a value for {key}:").pack(pady=5)
+
+        entry = tk.Entry(top)
+        entry.pack(pady=5, padx=10, fill="x")
+        entry.focus()
+
+        tk.Button(top, text="OK", command=submit_value).pack(pady=5)
+
     # Remove usage of simpledialog in set_parameter()
     def set_parameter(self, key: str, value_type: type):
         default_value = 100.0 if value_type == float else 100
@@ -887,11 +955,76 @@ class StockScreenerApp:
                             except Exception:
                                 continue
 
-                    data = matching_stocks
+                    screener_data = matching_stocks
 
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed Market Stage filter:\n{e}")
                     return
+
+            else:
+                screener_data = data
+
+            if any(k in self.params for k in ["yoyGrowth", "profitMargin", "rdRatio", "companyAge", "ruleOf40", "mvpStage"]):
+
+                def fetch_metrics(symbol):
+                    inc = requests.get(
+                        f"https://financialmodelingprep.com/api/v3/income-statement/{symbol}"
+                        f"?period={'annual' if self.params.get('yoyGrowth')=='Annual' else 'quarter'}"
+                        f"&limit=2&apikey={self.api_key}"
+                    ).json()
+                    profile = requests.get(
+                        f"https://financialmodelingprep.com/api/v3/profile/{symbol}"
+                        f"?apikey={self.api_key}"
+                    ).json()[0]
+                    return inc, profile
+
+                matching = []
+                for stock in screener_data:
+                    sym = stock["symbol"]
+                    inc_data, prof = fetch_metrics(sym)
+
+                    rev0 = float(inc_data[0]["revenue"] or 0)
+                    rev1 = float(inc_data[1]["revenue"] or 1)
+                    yoy = (rev0 - rev1) / rev1 * 100
+
+                    ni0 = float(inc_data[0]["netIncome"] or 0)
+                    pm = ni0 / rev0 * 100 if rev0 else 0
+
+                    rd0 = float(inc_data[0].get("rdExpenses") or 0)
+                    rd_ratio = rd0 / rev0 * 100 if rev0 else 0
+
+                    ipo = datetime.strptime(prof["ipoDate"], "%Y-%m-%d")
+                    age = (datetime.today() - ipo).days / 365
+
+                    rule40 = (yoy + pm) / 2 if "ruleOf40" in self.params else None
+
+                    if "mvpStage" in self.params:
+                        stage = self.params["mvpStage"]
+                        if stage == "Pre-product" and age > 2:
+                            continue
+                        if stage == "Early Product" and not (age <= 2 and rev0 >= 1_000_000):
+                            continue
+                        if stage == "Scaling" and rev0 < 10_000_000:
+                            continue
+
+                    if "yoyGrowth" in self.params and isinstance(self.params["yoyGrowth"], (int, float)) and yoy < float(self.params["yoyGrowth"]):
+                        continue
+                    if "profitMargin" in self.params and isinstance(self.params["profitMargin"], (int, float)) and pm < float(self.params["profitMargin"]):
+                        continue
+                    if "rdRatio" in self.params and isinstance(self.params["rdRatio"], (int, float)) and rd_ratio < float(self.params["rdRatio"]):
+                        continue
+                    if "companyAge" in self.params and age > int(self.params["companyAge"]):
+                        continue
+                    if "ruleOf40" in self.params and rule40 is not None and rule40 < 40:
+                        continue
+
+                    matching.append(stock)
+                    if len(matching) >= self.params.get("limit", 20):
+                        break
+
+                data = matching
+            else:
+                data = screener_data
 
             self.render_results(data)
 
