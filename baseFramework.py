@@ -18,6 +18,33 @@ except Exception:  # pragma: no cover - optional dependency for tests
     FigureCanvasTkAgg = Figure = mdates = None
 from datetime import datetime
 
+# Mapping between UI labels and parameter keys
+LABEL_TO_KEY = {
+    # Numeric filters
+    "Lower Price": "priceMoreThan",
+    "Upper Price": "priceLowerThan",
+    "Lower Market Cap": "marketCapMoreThan",
+    "Upper Market Cap": "marketCapLowerThan",
+    "Lower Volume": "volumeMoreThan",
+    "Upper Volume": "volumeLowerThan",
+    "Lower Beta": "betaMoreThan",
+    "Upper Beta": "betaLowerThan",
+    "Lower Dividend": "dividendMoreThan",
+    "Upper Dividend": "dividendLowerThan",
+    # Dropdowns + Boolean filters
+    "Sector": "sector",
+    "Industry": "industry",
+    "Exchange": "exchange",
+    "Is ETF?": "isEtf",
+    "Is Fund?": "isFund",
+    "Market Stage": "marketStage",
+    # Misc Filters
+    "Stock Search": "stockSearch",
+    "Limit Results": "limit",
+}
+
+KEY_TO_LABEL = {v: k for k, v in LABEL_TO_KEY.items()}
+
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
         super().__init__(master)
@@ -66,10 +93,25 @@ class DraggableBlock(tk.Frame):
         drop_y1 = drop_y0 + self.drop_target.winfo_height()
 
         dropped_in_zone = drop_x0 <= abs_x <= drop_x1 and drop_y0 <= abs_y <= drop_y1
+        label = self.preview_block._param_label
 
-        if dropped_in_zone:
-            label = self.preview_block._param_label
-            self.app.add_filter_block(label)
+        target_container = None
+        for c in self.app.containers:
+            cx0 = c.winfo_rootx()
+            cx1 = cx0 + c.winfo_width()
+            cy0 = c.winfo_rooty()
+            cy1 = cy0 + c.winfo_height()
+            if cx0 <= abs_x <= cx1 and cy0 <= abs_y <= cy1:
+                target_container = c
+                break
+
+        if dropped_in_zone or target_container:
+            if label == "Container" and not target_container:
+                self.app.add_container_block()
+            elif label in self.app.saved_algorithms:
+                self.app.load_algorithm(label)
+            else:
+                self.app.add_filter_block(label, container=target_container)
 
         # Destroy immediately after drawing (or skipping drop)
         if self._drag_window:
@@ -84,6 +126,12 @@ class DraggableBlock(tk.Frame):
         # Reconstruct a visual-only replica of the preview block
         label_text = self.preview_block._param_label
         base_key = self.app.get_param_key_from_label(label_text)
+
+        if label_text == "Container":
+            clone = tk.Frame(self._drag_window, bg="#dfefff", relief="groove", bd=2, width=300, height=80)
+            clone.pack_propagate(False)
+            tk.Label(clone, text="Container", font=("Arial", 10, "bold"), bg="#dfefff").pack(expand=True)
+            return clone
 
         clone = tk.Frame(self._drag_window, bg="white", relief='solid', bd=1, width=300, height=80)
         clone.pack_propagate(False)
@@ -111,6 +159,50 @@ class DraggableBlock(tk.Frame):
 
         return clone
 
+
+class ContainerBlock(tk.Frame):
+    def __init__(self, master, app, name="Container"):
+        super().__init__(master, bg="#dfefff", relief="groove", bd=2, width=320)
+        self.pack_propagate(False)
+        self.app = app
+        self.name = name
+        header = tk.Frame(self, bg="#dfefff")
+        header.pack(fill="x")
+        tk.Label(header, text=name, font=("Arial", 10, "bold"), bg="#dfefff")\
+            .pack(side="left")
+        remove_btn = tk.Button(
+            header, text="✖", font=("Arial", 10), fg="red", bg="#dfefff",
+            relief="flat", command=self.remove_self
+        )
+        remove_btn.pack(side="right")
+
+        self.canvas = tk.Canvas(self, bg="#f0f8ff", height=150, width=300, highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True, padx=5, pady=5)
+        self.snap_order = []
+
+    def add_filter_block(self, label, value=None):
+        frame = self.app._create_filter_block(self.canvas, self.snap_order, label, value)
+        self.reposition()
+        return frame
+
+    def reposition(self):
+        for i, (item_id, _) in enumerate(self.snap_order):
+            self.canvas.coords(item_id, 10, 30 + i * 90)
+        self.update_height()
+        self.app.reposition_snap_zone()
+
+    def update_height(self):
+        new_height = max(150, 40 + len(self.snap_order) * 90)
+        self.canvas.config(height=new_height)
+
+    def remove_self(self):
+        for _, f in list(self.snap_order):
+            self.app.remove_filter_block(f, f._param_key, container=self)
+        self.app.containers = [c for c in self.app.containers if c != self]
+        self.app.snap_order = [t for t in self.app.snap_order if t[1] != self]
+        self.destroy()
+        self.app.reposition_snap_zone()
+
 class StockScreenerApp:
     def __init__(self, root):
         self.root = root
@@ -125,8 +217,19 @@ class StockScreenerApp:
         self.snap_order = []
         self.result_tiles = {}  # Needed for render_stock_tile and cleanup
         self._income_cache = {}  # Cache for income statement data
+        self.saved_algorithms = {}
+        self.containers = []
 
         self.setup_layout()
+
+    def add_container_block(self):
+        container = ContainerBlock(self.snap_zone, self)
+        container.update_height()
+        item_id = self.snap_zone.create_window(10, 30 + len(self.snap_order) * 90, anchor='nw', window=container)
+        self.snap_order.append((item_id, container))
+        self.containers.append(container)
+        self.snap_zone_placeholder.place_forget()
+        self.reposition_snap_zone()
 
     def setup_layout(self):
         # === LEFT PANEL ===
@@ -206,6 +309,7 @@ class StockScreenerApp:
 
         # === FILTER PREVIEWS ===
         filters = [
+            ("Container", None),
             ("Stock Search", lambda: self.set_parameter("stockSearch", str)),
             ("Sector", lambda: self.open_dropdown("sector", ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
                                                             "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"])),
@@ -233,9 +337,31 @@ class StockScreenerApp:
             "Numeric Filters": []
         }
 
+        algo_btn = tk.Button(
+            self.block_scroll,
+            text="＋ Save Algorithm",
+            bg="#cce5ff", fg="#004085",
+            font=("Arial", 10, "bold"),
+            command=self.open_save_algorithm_dialog
+        )
+        algo_btn.pack(padx=10, pady=(5, 15), fill="x")
+
+        self.algo_header = tk.Label(
+            self.block_scroll,
+            text="Saved Algorithms",
+            bg="#e2e3e5",
+            font=("Arial", 10, "bold"),
+            anchor="w",
+            width=37
+        )
+        self.algo_header.pack(padx=10, pady=(10, 2))
+
+        self.algo_container = tk.Frame(self.block_scroll, bg="#f0f0f0")
+        self.algo_container.pack(fill="x", padx=10)
+
         for label, callback in filters:
             param_key = self.get_param_key_from_label(label)
-            if param_key in ["stockSearch", "limit"]:
+            if label == "Container" or param_key in ["stockSearch", "limit"]:
                 categories["Tools"].append((label, callback))
             elif param_key in ["sector", "industry", "exchange", "isEtf", "isFund"]:
                 categories["Drop Down Filters"].append((label, callback))
@@ -272,33 +398,20 @@ class StockScreenerApp:
 
 
     def get_param_key_from_label(self, label):
-        lookup = {
-            # Numeric filters
-            "Lower Price": "priceMoreThan",
-            "Upper Price": "priceLowerThan",
-            "Lower Market Cap": "marketCapMoreThan",
-            "Upper Market Cap": "marketCapLowerThan",
-            "Lower Volume": "volumeMoreThan",
-            "Upper Volume": "volumeLowerThan",
-            "Lower Beta": "betaMoreThan",
-            "Upper Beta": "betaLowerThan",
-            "Lower Dividend": "dividendMoreThan",
-            "Upper Dividend": "dividendLowerThan",
-            # Dropdowns + Boolean filters
-            "Sector": "sector",
-            "Industry": "industry",
-            "Exchange": "exchange",
-            "Is ETF?": "isEtf",
-            "Is Fund?": "isFund",
-            "Market Stage": "marketStage",
-            # Misc Filters
-            "Stock Search": "stockSearch",
-            "Limit Results": "limit"
-        }
-        return lookup.get(label, label)
+        return LABEL_TO_KEY.get(label, label)
+
+    def get_label_from_param_key(self, key):
+        base = key.split('_')[0]
+        return KEY_TO_LABEL.get(base, base)
 
     def create_filter_preview_block(self, label, parent):
         base_key = self.get_param_key_from_label(label)
+        if label == "Container":
+            frame = tk.Frame(parent, bg="#dfefff", relief="groove", bd=2, width=300, height=80)
+            frame.pack_propagate(False)
+            tk.Label(frame, text="Container", font=("Arial", 10, "bold"), bg="#dfefff").pack(expand=True)
+            frame._param_label = label
+            return frame
         options_map = {
             "sector": ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
                     "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"],
@@ -350,11 +463,11 @@ class StockScreenerApp:
         frame._param_label = label  # used for dragging
         return frame
 
-    def add_filter_block(self, label):
+    def _create_filter_block(self, canvas, order_list, label, value=None):
         base_key = self.get_param_key_from_label(label)
 
-        # Assign a unique key
-        count = sum(1 for _, f in self.snap_order if f._param_key.startswith(base_key))
+        # Assign a unique key within this container/workspace
+        count = sum(1 for _, f in order_list if f._param_key.startswith(base_key))
         key = f"{base_key}_{count+1}" if count else base_key
 
         options_map = {
@@ -370,7 +483,7 @@ class StockScreenerApp:
             "marketStage": ["Rule of 40: Growth + Margin >= 40%"]
         }
 
-        block_frame = tk.Frame(self.snap_zone, bg="white", relief='solid', bd=1, width=300, height=80)
+        block_frame = tk.Frame(canvas, bg="white", relief='solid', bd=1, width=300, height=80)
         block_frame.pack_propagate(False)
         block_frame._param_key = key
 
@@ -389,7 +502,7 @@ class StockScreenerApp:
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
 
             combo = ttk.Combobox(dropdown_row, values=options_map[base_key], font=("Arial", 10), state="readonly")
-            combo.set("")  # Start blank
+            combo.set(value if value is not None else "")
             combo.pack(side="left", fill="x", expand=True)
 
             def update_selection(event):
@@ -401,6 +514,8 @@ class StockScreenerApp:
                 self.delayed_search()  # use this instead of update_display()
 
             combo.bind("<<ComboboxSelected>>", update_selection)
+            if value is not None:
+                self.params[key] = value
 
         elif base_key == "stockSearch":
             search_row = tk.Frame(block_frame, bg="white")
@@ -408,6 +523,9 @@ class StockScreenerApp:
 
             entry = tk.Entry(search_row, font=("Arial", 10))
             entry.pack(side="left", fill="x", expand=True)
+            if value is not None:
+                entry.insert(0, str(value))
+                self.params[key] = value
 
             self._stock_search_delay_id = None
 
@@ -478,16 +596,32 @@ class StockScreenerApp:
             slider.config(command=on_slider_move)
             slider.bind("<ButtonRelease-1>", on_slider_release)
             val_entry.bind("<Return>", on_entry_return)
+            if value is not None:
+                slider.set(value)
+                val_var.set(f"{float(value):.2f}")
+                self.params[key] = value
 
         # Add to snap zone
-        item_id = self.snap_zone.create_window(10, 30 + len(self.snap_order) * 90, anchor='nw', window=block_frame)
-        self.snap_order.append((item_id, block_frame))
-        self.snap_zone_placeholder.place_forget()
-        self.reposition_snap_zone()
+        item_id = canvas.create_window(10, 30 + len(order_list) * 90, anchor='nw', window=block_frame)
+        order_list.append((item_id, block_frame))
+        return block_frame
+
+    def add_filter_block(self, label, value=None, container=None):
+        if container is None:
+            frame = self._create_filter_block(self.snap_zone, self.snap_order, label, value)
+            self.snap_zone_placeholder.place_forget()
+            self.reposition_snap_zone()
+        else:
+            frame = container.add_filter_block(label, value)
+        return frame
 
     def reposition_snap_zone(self):
-        for i, (item_id, _) in enumerate(self.snap_order):
-            self.snap_zone.coords(item_id, 10, 30 + i * 90)
+        y = 30
+        for item_id, widget in self.snap_order:
+            self.snap_zone.coords(item_id, 10, y)
+            widget.update_idletasks()
+            h = widget.winfo_height() or widget.winfo_reqheight() or 80
+            y += h + 10
 
     def slider_update(self, key, val): 
         try:
@@ -502,18 +636,74 @@ class StockScreenerApp:
             print(f"Slider error: {e}")
 
 
-    def remove_filter_block(self, frame, key):
+    def remove_filter_block(self, frame, key, container=None):
         frame.destroy()
 
         if key in self.params:
             del self.params[key]
 
-        self.snap_order = [(item_id, f) for item_id, f in self.snap_order if f != frame]
+        if container is None:
+            self.snap_order = [(item_id, f) for item_id, f in self.snap_order if f != frame]
+            if not self.snap_order:
+                self.snap_zone_placeholder.place(relx=0.5, rely=0.5, anchor="center")
+            self.reposition_snap_zone()
+        else:
+            container.snap_order = [(item_id, f) for item_id, f in container.snap_order if f != frame]
+            container.reposition()
 
-        if not self.snap_order:
-            self.snap_zone_placeholder.place(relx=0.5, rely=0.5, anchor="center")
+    def open_save_algorithm_dialog(self):
+        if not self.params:
+            messagebox.showinfo("Save Algorithm", "Add filters to the workspace first.")
+            return
+
+        top = Toplevel(self.root)
+        top.title("Save Algorithm")
+        top.geometry("300x120")
+
+        tk.Label(top, text="Algorithm Name:").pack(pady=(10,0), padx=10, anchor="w")
+        name_entry = tk.Entry(top)
+        name_entry.pack(padx=10, fill="x")
+        name_entry.focus()
+
+        def submit():
+            name = name_entry.get().strip()
+            if not name:
+                return
+            self.saved_algorithms[name] = dict(self.params)
+            self._add_algorithm_preview(name)
+            top.destroy()
+
+        tk.Button(top, text="Save", command=submit).pack(pady=10)
+
+    def _add_algorithm_preview(self, name):
+        frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
+        frame.pack_propagate(False)
+        tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white").pack(fill="both", expand=True)
+
+        frame._param_label = name
+        DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
+        frame.pack(pady=4)
+
+    def load_algorithm(self, name):
+        params = self.saved_algorithms.get(name)
+        if not params:
+            return
+
+        # Clear existing workspace
+        for _, frame in self.snap_order:
+            frame.destroy()
+        self.snap_order.clear()
+        for c in list(self.containers):
+            c.destroy()
+        self.containers.clear()
+        self.params.clear()
+
+        for key, value in params.items():
+            label = self.get_label_from_param_key(key)
+            self.add_filter_block(label, value)
 
         self.reposition_snap_zone()
+        self.update_display()
 
     def open_dropdown(self, key, options):
         def submit_selection():
