@@ -34,6 +34,17 @@ LABEL_TO_KEY = {
 # Reverse lookup for labels from parameter keys
 KEY_TO_LABEL = {v: k for k, v in LABEL_TO_KEY.items()}
 
+
+def get_param_key_from_label(label: str) -> str:
+    """Return the API parameter key for a given UI label."""
+    return LABEL_TO_KEY.get(label, label)
+
+
+def get_label_from_param_key(key: str) -> str:
+    """Return the UI label for a given API parameter key."""
+    base = key.split('_')[0]
+    return KEY_TO_LABEL.get(base, base)
+
 # Options for dropdown-based filters. ``None`` indicates a free text entry.
 FILTER_OPTIONS = {
     "sector": ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
