@@ -440,7 +440,7 @@ class StockScreenerApp:
 
             def on_slider_move(val):
                 if 'marketcap' in key.lower():
-                    val_var.set(str(int(round(float(val)))) )
+                    val_var.set(f"{int(round(float(val))):,}")
                 else:
                     val_var.set(f"{float(val):.2f}")
 
@@ -450,6 +450,7 @@ class StockScreenerApp:
                     if 'marketcap' in key.lower():
                         val = round(val / 1_000_000) * 1_000_000
                         slider.set(val)
+                        val_var.set(f"{int(val):,}")
                     if key not in self.params or self.params[key] != val:
                         self.params[key] = val
                         self.update_display()
@@ -458,13 +459,13 @@ class StockScreenerApp:
 
             def on_entry_return(event):
                 try:
-                    val = float(val_var.get())
+                    val = float(val_var.get().replace(',', ''))
                     if 'marketcap' in key.lower():
                         val = round(val / 1_000_000) * 1_000_000
                     slider.set(val)
                     self.params[key] = val
                     if 'marketcap' in key.lower():
-                        val_var.set(str(int(val)))
+                        val_var.set(f"{int(val):,}")
                     self.update_display()
                 except ValueError:
                     self.params.pop(key, None)
@@ -475,7 +476,7 @@ class StockScreenerApp:
             if value is not None:
                 slider.set(value)
                 if 'marketcap' in key.lower():
-                    val_var.set(str(int(value)))
+                    val_var.set(f"{int(value):,}")
                 else:
                     val_var.set(f"{float(value):.2f}")
                 self.params[key] = value
