@@ -1,6 +1,13 @@
 import tkinter as tk
 from tkinter import simpledialog, messagebox, Toplevel, filedialog
 from tkinter import ttk
+from constants import (
+    LABEL_TO_KEY,
+    KEY_TO_LABEL,
+    FILTER_OPTIONS,
+    get_param_key_from_label as util_get_param_key_from_label,
+    get_label_from_param_key as util_get_label_from_param_key,
+)
 try:
     import requests
 except Exception:  # pragma: no cover - optional dependency for tests
@@ -17,33 +24,6 @@ try:
 except Exception:  # pragma: no cover - optional dependency for tests
     FigureCanvasTkAgg = Figure = mdates = None
 from datetime import datetime
-
-# Mapping between UI labels and parameter keys
-LABEL_TO_KEY = {
-    # Numeric filters
-    "Lower Price": "priceMoreThan",
-    "Upper Price": "priceLowerThan",
-    "Lower Market Cap": "marketCapMoreThan",
-    "Upper Market Cap": "marketCapLowerThan",
-    "Lower Volume": "volumeMoreThan",
-    "Upper Volume": "volumeLowerThan",
-    "Lower Beta": "betaMoreThan",
-    "Upper Beta": "betaLowerThan",
-    "Lower Dividend": "dividendMoreThan",
-    "Upper Dividend": "dividendLowerThan",
-    # Dropdowns + Boolean filters
-    "Sector": "sector",
-    "Industry": "industry",
-    "Exchange": "exchange",
-    "Is ETF?": "isEtf",
-    "Is Fund?": "isFund",
-    "Market Stage": "marketStage",
-    # Misc Filters
-    "Stock Search": "stockSearch",
-    "Limit Results": "limit",
-}
-
-KEY_TO_LABEL = {v: k for k, v in LABEL_TO_KEY.items()}
 
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
@@ -238,12 +218,11 @@ class StockScreenerApp:
         # === FILTER PREVIEWS ===
         filters = [
             ("Stock Search", lambda: self.set_parameter("stockSearch", str)),
-            ("Sector", lambda: self.open_dropdown("sector", ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
-                                                            "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"])),
-            ("Industry", lambda: self.open_dropdown("industry", ["Software", "Oil & Gas", "Biotechnology", "Banks", "Retail", "Semiconductors"])),
-            ("Exchange", lambda: self.open_dropdown("exchange", ["NASDAQ", "NYSE", "AMEX"])),
-            ("Is ETF?", lambda: self.open_dropdown("isEtf", ["true", "false"])),
-            ("Is Fund?", lambda: self.open_dropdown("isFund", ["true", "false"])),
+            ("Sector", lambda: self.open_dropdown("sector", FILTER_OPTIONS["sector"])),
+            ("Industry", lambda: self.open_dropdown("industry", FILTER_OPTIONS["industry"])),
+            ("Exchange", lambda: self.open_dropdown("exchange", FILTER_OPTIONS["exchange"])),
+            ("Is ETF?", lambda: self.open_dropdown("isEtf", FILTER_OPTIONS["isEtf"])),
+            ("Is Fund?", lambda: self.open_dropdown("isFund", FILTER_OPTIONS["isFund"])),
             ("Lower Price", lambda: self.set_parameter("priceMoreThan", float)),
             ("Upper Price", lambda: self.set_parameter("priceLowerThan", float)),
             ("Lower Market Cap", lambda: self.set_parameter("marketCapMoreThan", float)),
@@ -255,7 +234,7 @@ class StockScreenerApp:
             ("Lower Volume", lambda: self.set_parameter("volumeMoreThan", float)),
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Limit Results", lambda: self.set_parameter("limit", int)),
-            ("Market Stage", lambda: self.open_dropdown("marketStage", ["Rule of 40: Growth + Margin >= 40%"]))
+            ("Market Stage", lambda: self.open_dropdown("marketStage", FILTER_OPTIONS["marketStage"]))
         ]
 
         categories = {
@@ -325,27 +304,13 @@ class StockScreenerApp:
 
 
     def get_param_key_from_label(self, label):
-        return LABEL_TO_KEY.get(label, label)
+        return util_get_param_key_from_label(label)
 
     def get_label_from_param_key(self, key):
-        base = key.split('_')[0]
-        return KEY_TO_LABEL.get(base, base)
+        return util_get_label_from_param_key(key)
 
     def create_filter_preview_block(self, label, parent):
         base_key = self.get_param_key_from_label(label)
-        options_map = {
-            "sector": ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
-                    "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"],
-            "industry": ["Software", "Oil & Gas", "Biotechnology", "Banks", "Retail", "Semiconductors"],
-            "country": ["US", "Canada", "Germany", "UK", "France", "India", "Japan", "China"],
-            "exchange": ["NASDAQ", "NYSE", "AMEX"],
-            "isEtf": ["true", "false"],
-            "isFund": ["true", "false"],
-            "isActivelyTrading": ["true", "false"],
-            "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Rule of 40: Growth + Margin >= 40%"]
-
-        }
 
         frame = tk.Frame(parent, bg="white", relief='solid', bd=1, width=300, height=80)  # Container for filter preview blocks
         frame.pack_propagate(False)
@@ -354,10 +319,10 @@ class StockScreenerApp:
         title_row.pack(fill="x", pady=(5, 0), padx=8)
         tk.Label(title_row, text=label, font=("Arial", 10, "bold"), bg="white").pack(side="left")
 
-        if base_key in options_map:
+        if base_key in FILTER_OPTIONS and FILTER_OPTIONS[base_key] is not None:
             dropdown_row = tk.Frame(frame, bg="white")
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
-            options = options_map[base_key]
+            options = FILTER_OPTIONS[base_key]
             combo = ttk.Combobox(dropdown_row, values=options, font=("Arial", 10), state="disabled")
             combo.set('') #combo.set(options[0])
             combo.pack(side="left", fill="x", expand=True)
@@ -391,18 +356,6 @@ class StockScreenerApp:
         count = sum(1 for _, f in self.snap_order if f._param_key.startswith(base_key))
         key = f"{base_key}_{count+1}" if count else base_key
 
-        options_map = {
-            "sector": ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
-                    "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"],
-            "industry": ["Software", "Oil & Gas", "Biotechnology", "Banks", "Retail", "Semiconductors"],
-            "country": ["US", "Canada", "Germany", "UK", "France", "India", "Japan", "China"],
-            "exchange": ["NASDAQ", "NYSE", "AMEX"],
-            "isEtf": ["true", "false"],
-            "isFund": ["true", "false"],
-            "isActivelyTrading": ["true", "false"],
-            "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Rule of 40: Growth + Margin >= 40%"]
-        }
 
         block_frame = tk.Frame(self.snap_zone, bg="white", relief='solid', bd=1, width=300, height=80)
         block_frame.pack_propagate(False)
@@ -418,11 +371,11 @@ class StockScreenerApp:
         )
         remove_button.pack(side="right")
 
-        if base_key in options_map:
+        if base_key in FILTER_OPTIONS and FILTER_OPTIONS[base_key] is not None:
             dropdown_row = tk.Frame(block_frame, bg="white")
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
 
-            combo = ttk.Combobox(dropdown_row, values=options_map[base_key], font=("Arial", 10), state="readonly")
+            combo = ttk.Combobox(dropdown_row, values=FILTER_OPTIONS[base_key], font=("Arial", 10), state="readonly")
             combo.set(value if value is not None else "")
             combo.pack(side="left", fill="x", expand=True)
 
