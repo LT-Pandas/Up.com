@@ -470,9 +470,11 @@ class StockScreenerApp:
                 except ValueError:
                     numeric = 0
                 if "marketcap" in key.lower():
+
                     formatted = format_number(numeric)
                 else:
                     formatted = f"{numeric:,.2f}"
+
                 value_label.config(text=formatted)
                 ratio = (numeric - from_) / (to_ - from_)
                 ratio = max(0, min(1, ratio))
@@ -493,8 +495,10 @@ class StockScreenerApp:
                     if 'marketcap' in key.lower():
                         val = round(val / 1_000_000) * 1_000_000
                         slider.set(val)
+
                         val_var.set(format_number(val))
                     update_value_display(val)
+
                     if key not in self.params or self.params[key] != val:
                         self.params[key] = val
                         self.update_display()
@@ -510,6 +514,7 @@ class StockScreenerApp:
                     self.params[key] = val
                     if 'marketcap' in key.lower():
                         val_var.set(format_number(val))
+
                     update_value_display(val)
                     self.update_display()
                 except ValueError:
@@ -521,9 +526,11 @@ class StockScreenerApp:
             if value is not None:
                 slider.set(value)
                 if 'marketcap' in key.lower():
+
                     val_var.set(format_number(value))
                 else:
                     val_var.set(f"{float(value):,.2f}")
+
                 self.params[key] = value
                 update_value_display(value)
 
