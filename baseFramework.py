@@ -470,6 +470,7 @@ class StockScreenerApp:
                     val_var.set(f"{float(val):.2f}")
                 update_value_display(val)
 
+
             def on_slider_release(event):
                 try:
                     val = float(slider.get())
@@ -477,7 +478,9 @@ class StockScreenerApp:
                         val = round(val / 1_000_000) * 1_000_000
                         slider.set(val)
                         val_var.set(f"{int(val):,}")
+
                     update_value_display(val)
+
                     if key not in self.params or self.params[key] != val:
                         self.params[key] = val
                         self.update_display()
