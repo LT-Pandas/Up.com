@@ -17,6 +17,13 @@ except Exception:  # pragma: no cover - optional dependency for tests
     FigureCanvasTkAgg = Figure = mdates = None
 from datetime import datetime
 
+def format_number(value: float) -> str:
+    """Return a human-readable string with comma separators."""
+    try:
+        return f"{int(round(float(value))):,}"
+    except Exception:
+        return str(value)
+
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
         super().__init__(master)
@@ -217,8 +224,8 @@ class StockScreenerApp:
             ("Is Fund?", lambda: self.open_dropdown("isFund", FILTER_OPTIONS["isFund"])),
             ("Lower Price", lambda: self.set_parameter("priceMoreThan", float)),
             ("Upper Price", lambda: self.set_parameter("priceLowerThan", float)),
-            ("Lower Market Cap", lambda: self.set_parameter("marketCapMoreThan", float)),
-            ("Upper Market Cap", lambda: self.set_parameter("marketCapLowerThan", float)),
+            ("Lower Market Cap ($M)", lambda: self.set_parameter("marketCapMoreThan", float)),
+            ("Upper Market Cap ($M)", lambda: self.set_parameter("marketCapLowerThan", float)),
             ("Lower Beta", lambda: self.set_parameter("betaMoreThan", float)),
             ("Upper Beta", lambda: self.set_parameter("betaLowerThan", float)),
             ("Lower Dividend", lambda: self.set_parameter("dividendMoreThan", float)),
@@ -416,13 +423,23 @@ class StockScreenerApp:
 
             val_var = tk.StringVar(value="")
 
-            val_entry = tk.Entry(slider_row, textvariable=val_var, width=6, justify="center", relief="groove", font=("Arial", 10))
+            # use wider entry to accommodate comma separated market cap values
+            entry_width = 6 if 'marketcap' not in key.lower() else 20
+
+            val_entry = tk.Entry(
+                slider_row,
+                textvariable=val_var,
+                width=entry_width,
+                justify="center",
+                relief="groove",
+                font=("Arial", 10),
+            )
             val_entry.pack(side="left", padx=(0, 10))
 
             if 'price' in key.lower():
                 from_, to_, resolution = 0, 1000, 1
             elif 'marketcap' in key.lower():
-                from_, to_, resolution = 0, 1_000_000_000_000, 1_000_000
+                from_, to_, resolution = 10_000_000, 10_000_000_000_000, 1_000_000
             elif 'beta' in key.lower():
                 from_, to_, resolution = -2, 5, 0.1
             elif 'volume' in key.lower():
@@ -434,16 +451,50 @@ class StockScreenerApp:
             else:
                 from_, to_, resolution = 0, 200, 1
 
-            slider = tk.Scale(slider_row, from_=from_, to=to_, orient="horizontal",
-                            resolution=resolution, length=200)
+            slider = tk.Scale(
+                slider_row,
+                from_=from_,
+                to=to_,
+                orient="horizontal",
+                resolution=resolution,
+                length=200,
+            )
             slider.pack(side="left", fill="x", expand=True)
 
+            value_label = tk.Label(slider_row, text="", font=("Arial", 9), bg="white")
+            value_label.place(in_=slider, relx=0, y=-8, anchor="s")
+
+            def update_value_display(val):
+                try:
+                    numeric = float(val)
+                except ValueError:
+                    numeric = 0
+                if "marketcap" in key.lower():
+                    formatted = format_number(numeric)
+                else:
+                    formatted = f"{numeric:,.2f}"
+                value_label.config(text=formatted)
+                ratio = (numeric - from_) / (to_ - from_)
+                ratio = max(0, min(1, ratio))
+                value_label.place(in_=slider, relx=ratio, y=-8, anchor="s")
+
+            update_value_display(slider.get())
+
             def on_slider_move(val):
-                val_var.set(f"{float(val):.2f}")
+                if 'marketcap' in key.lower():
+                    val_var.set(format_number(val))
+                else:
+                    val_var.set(f"{float(val):,.2f}")
+                update_value_display(val)
 
             def on_slider_release(event):
                 try:
                     val = float(slider.get())
+                    if 'marketcap' in key.lower():
+                        val = round(val / 1_000_000) * 1_000_000
+                        slider.set(val)
+                        val_var.set(format_number(val))
+                    update_value_display(val)
                     if key not in self.params or self.params[key] != val:
                         self.params[key] = val
                         self.update_display()
@@ -452,9 +503,14 @@ class StockScreenerApp:
 
             def on_entry_return(event):
                 try:
-                    val = float(val_var.get())
+                    val = float(val_var.get().replace(',', ''))
+                    if 'marketcap' in key.lower():
+                        val = round(val / 1_000_000) * 1_000_000
                     slider.set(val)
                     self.params[key] = val
+                    if 'marketcap' in key.lower():
+                        val_var.set(format_number(val))
+                    update_value_display(val)
                     self.update_display()
                 except ValueError:
                     self.params.pop(key, None)
@@ -464,8 +520,12 @@ class StockScreenerApp:
             val_entry.bind("<Return>", on_entry_return)
             if value is not None:
                 slider.set(value)
-                val_var.set(f"{float(value):.2f}")
+                if 'marketcap' in key.lower():
+                    val_var.set(format_number(value))
+                else:
+                    val_var.set(f"{float(value):,.2f}")
                 self.params[key] = value
+                update_value_display(value)
 
         # Add to snap zone
         item_id = self.snap_zone.create_window(10, 30 + len(self.snap_order) * 90, anchor='nw', window=block_frame)
