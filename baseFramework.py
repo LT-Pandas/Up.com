@@ -8,15 +8,7 @@ from constants import (
     get_param_key_from_label as util_get_param_key_from_label,
     get_label_from_param_key as util_get_label_from_param_key,
 )
-try:
-    import requests
-except Exception:  # pragma: no cover - optional dependency for tests
-    class _RequestsStub:
-        def get(self, *a, **k):
-            raise ModuleNotFoundError("requests is required to fetch remote data")
-
-    requests = _RequestsStub()
-import json
+from backend import StockDataService
 try:
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
@@ -134,8 +126,8 @@ class StockScreenerApp:
 
         self.snap_order = []
         self.result_tiles = {}  # Needed for render_stock_tile and cleanup
-        self._income_cache = {}  # Cache for income statement data
         self.saved_algorithms = {}
+        self.backend = StockDataService(self.api_key, self.base_url, self.quote_url)
 
         self.setup_layout()
 
@@ -598,118 +590,9 @@ class StockScreenerApp:
         self._search_delay_id = self.root.after(delay_ms, self.search_stocks)
 
     def search_stocks(self):
-        if "stockSearch" in self.params:
-            symbol_fragment = self.params["stockSearch"]
-            if len(symbol_fragment) < 1:
-                return
-            url = f"https://financialmodelingprep.com/api/v3/search?query={symbol_fragment}&limit=10&exchange=NASDAQ&apikey={self.api_key}"
-        else:
-            url = self.base_url + '&'.join(
-                f"{key}={str(val).lower() if isinstance(val, bool) else val}"
-                for key, val in self.params.items() if val not in ["", None]
-            )
-
-            url += f"&apikey={self.api_key}"
-            if "limit" not in self.params:
-                url += "&limit=20"
-
-        #if "limit" not in self.params:
-            #url += "&limit=20"
-
         try:
-            response = requests.get(url)
-            data = response.json()
-
-            if any("marketStage" in k for k in self.params):
-                base_screen_url = self.base_url + '&'.join(
-                    f"{key}={str(val).lower() if isinstance(val, bool) else val}"
-                    for key, val in self.params.items()
-                    if key != "marketStage" and val not in ["", None]
-                )
-                base_screen_url += f"&apikey={self.api_key}&limit=100"
-
-                try:
-                    response = requests.get(base_screen_url)
-                    screener_data = response.json()
-
-                    matching_stocks = []
-                    import concurrent.futures
-
-                    def fetch_income(symbol):
-                        if symbol in self._income_cache:
-                            return symbol, self._income_cache[symbol]
-
-                        try:
-                            url = (
-                                f"https://financialmodelingprep.com/api/v3/income-statement/"
-                                f"{symbol}?period=quarter&limit=6&apikey={self.api_key}"
-                            )
-                            data = requests.get(url, timeout=3).json()
-                            self._income_cache[symbol] = data
-                            return symbol, data
-                        except Exception:
-                            return symbol, []
-
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-                        futures = [executor.submit(fetch_income, stock["symbol"]) for stock in screener_data]
-                        income_results = {}
-                        for future in concurrent.futures.as_completed(futures):
-                            symbol, inc_data = future.result()
-                            if inc_data:
-                                income_results[symbol] = inc_data
-
-                        for stock in screener_data:
-                            symbol = stock["symbol"]
-                            income_data = income_results.get(symbol, [])
-
-                            if len(income_data) < 5:
-                                continue
-
-                            try:
-                                q0, q1, q2, q3, q4 = income_data[:5]
-
-                                rev0 = float(q0.get("revenue") or 0)
-                                rev1 = float(q1.get("revenue") or 0)
-                                rev2 = float(q2.get("revenue") or 0)
-                                rev3 = float(q3.get("revenue") or 0)
-                                rev4 = float(q4.get("revenue") or 0)
-
-                                net0 = float(q0.get("netIncome") or 0)
-                                net1 = float(q1.get("netIncome") or 0)
-
-                                if any(v == 0 for v in [rev0, rev1, rev2, rev3, rev4]):
-                                    continue
-
-                                growth0 = (rev0 - rev1) / rev1 * 100
-                                growth1 = (rev1 - rev2) / rev2 * 100
-                                margin0 = (net0 / rev0) * 100
-                                margin1 = (net1 / rev1) * 100
-
-                                rule40_avg = ((growth0 + margin0) + (growth1 + margin1)) / 2
-
-                                flat_prev1 = (rev2 - rev3) / rev3 * 100
-                                flat_prev2 = (rev3 - rev4) / rev4 * 100
-
-                                if (
-                                    rule40_avg >= 40
-                                    and abs(flat_prev1) <= 5
-                                    and abs(flat_prev2) <= 5
-                                ):
-                                    matching_stocks.append(stock)
-                                    if len(matching_stocks) >= 20:
-                                        break
-
-                            except Exception:
-                                continue
-
-                    data = matching_stocks
-
-                except Exception as e:
-                    messagebox.showerror("Error", f"Failed Market Stage filter:\n{e}")
-                    return
-
+            data = self.backend.search(self.params)
             self.render_results(data)
-
         except Exception as e:
             messagebox.showerror("Error", f"Failed to fetch data:\n{e}")
 
@@ -722,8 +605,7 @@ class StockScreenerApp:
 
         if isinstance(data, list) and data:
             symbols = [item.get("symbol", "") for item in data if "symbol" in item]
-            quote_url = f"{self.quote_url}{','.join(symbols)}?apikey={self.api_key}"
-            quote_data = requests.get(quote_url).json()
+            quote_data = self.backend.get_quotes(symbols)
             quote_map = {q["symbol"]: q for q in quote_data if "symbol" in q}
 
             for item in data:
@@ -741,19 +623,7 @@ class StockScreenerApp:
             ).pack(pady=20)
 
     def get_historical_prices(self, symbol):
-        try:
-            url = f"https://financialmodelingprep.com/api/v3/historical-chart/5min/{symbol}?apikey={self.api_key}"
-            response = requests.get(url)
-            data = response.json()
-
-            print(f"[DEBUG] {symbol} returned {len(data)} entries")
-            print("[DEBUG] Sample date:", data[0]["date"] if data else "No data")
-
-            return [(datetime.strptime(item["date"], "%Y-%m-%d %H:%M:%S"), item["close"])
-                    for item in reversed(data)]
-        except Exception as e:
-            print(f"[ERROR] Failed to fetch history for {symbol}: {e}")
-            return []
+        return self.backend.get_historical_prices(symbol)
 
     def render_stock_tile(self, symbol, quote_data, parent=None):
         if parent is None:
