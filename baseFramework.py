@@ -271,11 +271,6 @@ class StockScreenerApp:
         self.right_frame = tk.Frame(self.root)
         self.right_frame.pack(side="right", fill="both", expand=True)
 
-        # --- new: Save Algorithm button ---
-        save_btn = tk.Button(self.right_frame, text="Save Algorithm",
-                             command=self.save_algorithm)
-        save_btn.pack(pady=5)
-
         self.results_container = tk.Frame(self.right_frame, bg="white")
         self.results_container.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -302,7 +297,6 @@ class StockScreenerApp:
 
         # === FILTER PREVIEWS ===
         filters = [
-            ("Container", None),
             ("Stock Search", lambda: self.set_parameter("stockSearch", str)),
             ("Sector", lambda: self.open_dropdown("sector", ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
                                                             "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"])),
@@ -341,7 +335,7 @@ class StockScreenerApp:
             text="＋ Save Algorithm",
             bg="#cce5ff", fg="#004085",
             font=("Arial", 10, "bold"),
-            command=self.open_save_algorithm_dialog
+            command=self.save_algorithm
         )
         algo_btn.pack(padx=10, pady=(5, 15), fill="x")
 
@@ -360,7 +354,7 @@ class StockScreenerApp:
 
         for label, callback in filters:
             param_key = self.get_param_key_from_label(label)
-            if label == "Container" or param_key in ["stockSearch", "limit"]:
+            if param_key in ["stockSearch", "limit"]:
                 categories["Tools"].append((label, callback))
             elif param_key in ["sector", "industry", "exchange", "isEtf", "isFund"]:
                 categories["Drop Down Filters"].append((label, callback))
@@ -392,18 +386,6 @@ class StockScreenerApp:
                     drop_target=self.block_area
                 )
 
-        # --- new: Load Algorithm dropdown ---
-        self.load_combo = ttk.Combobox(
-            self.block_scroll, state="readonly",
-            values=self._list_saved_algorithms()
-        )
-        self.load_combo.set("Load Algorithm")
-        self.load_combo.pack(padx=10, pady=(10, 15), fill="x")
-        self.load_combo.bind(
-            "<<ComboboxSelected>>",
-            lambda e: self.load_algorithm(self.load_combo.get())
-        )
-
     def _on_results_mousewheel(self, event):
         self.results_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
@@ -419,12 +401,6 @@ class StockScreenerApp:
 
     def create_filter_preview_block(self, label, parent):
         base_key = self.get_param_key_from_label(label)
-        if label == "Container":
-            frame = tk.Frame(parent, bg="#dfefff", relief="groove", bd=2, width=300, height=80)
-            frame.pack_propagate(False)
-            tk.Label(frame, text="Container", font=("Arial", 10, "bold"), bg="#dfefff").pack(expand=True)
-            frame._param_label = label
-            return frame
         # Configuration for dropdowns lives in ``FILTER_OPTIONS`` to avoid
         # repeating the dictionaries in multiple places.
 
@@ -662,7 +638,6 @@ class StockScreenerApp:
             container.snap_order = [(item_id, f) for item_id, f in container.snap_order if f != frame]
             container.reposition()
 
-
     def open_save_algorithm_dialog(self):
         if not self.params:
             messagebox.showinfo("Save Algorithm", "Add filters to the workspace first.")
@@ -760,13 +735,6 @@ class StockScreenerApp:
             frame.destroy()
         self.snap_order.clear()
         self.params.clear()
-
-        for key, value in params.items():
-            label = self.get_label_from_param_key(key)
-            self.add_filter_block(label, value)
-
-        self.reposition_snap_zone()
-        self.update_display()
 
     def open_dropdown(self, key, options):
         def submit_selection():
@@ -1119,6 +1087,7 @@ class StockScreenerApp:
         os.makedirs("algorithms", exist_ok=True)
         with open(os.path.join("algorithms", f"{name}.json"), "w") as fh:
             json.dump(alg.to_dict(), fh, indent=2)
+            
         if hasattr(self, "load_combo"):
             self.load_combo["values"] = self._list_saved_algorithms()
 
@@ -1143,6 +1112,15 @@ class StockScreenerApp:
         self.reposition_snap_zone()
         self.update_display()
 
+    def _add_algorithm_preview(self, name):
+        frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
+        frame.pack_propagate(False)
+        tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white").pack(fill="both", expand=True)
+
+        frame._param_label = name
+        DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
+        frame.pack(pady=4)
+
     def _serialize_frame(self, frame):
         if isinstance(frame, ContainerBlock):
             children = [self._serialize_frame(f) for _, f in frame.snap_order]
@@ -1165,7 +1143,7 @@ class StockScreenerApp:
                 self.add_filter_block(label, node.value)
             else:
                 container.add_filter_block(label, node.value)
-
+                
     def _list_saved_algorithms(self):
         if not os.path.isdir("algorithms"):
             return []
