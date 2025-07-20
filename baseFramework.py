@@ -1,6 +1,12 @@
+"""Main application module for the block-based stock screener."""
+
 import tkinter as tk
-from tkinter import simpledialog, messagebox, Toplevel, filedialog
+from tkinter import messagebox, Toplevel
 from tkinter import ttk
+import logging
+from constants import LABEL_TO_KEY, KEY_TO_LABEL, FILTER_OPTIONS
+
+logging.basicConfig(level=logging.INFO)
 try:
     import requests
 except Exception:  # pragma: no cover - optional dependency for tests
@@ -9,7 +15,6 @@ except Exception:  # pragma: no cover - optional dependency for tests
             raise ModuleNotFoundError("requests is required to fetch remote data")
 
     requests = _RequestsStub()
-import json
 try:
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
@@ -19,37 +24,7 @@ except Exception:  # pragma: no cover - optional dependency for tests
 from datetime import datetime
 
 # Mapping between UI labels and parameter keys
-LABEL_TO_KEY = {
-    # Numeric filters
-    "Lower Price": "priceMoreThan",
-    "Upper Price": "priceLowerThan",
-    "Lower Market Cap": "marketCapMoreThan",
-    "Upper Market Cap": "marketCapLowerThan",
-    "Lower Volume": "volumeMoreThan",
-    "Upper Volume": "volumeLowerThan",
-    "Lower Beta": "betaMoreThan",
-    "Upper Beta": "betaLowerThan",
-    "Lower Dividend": "dividendMoreThan",
-    "Upper Dividend": "dividendLowerThan",
-    # Dropdowns + Boolean filters
-    "Sector": "sector",
-    "Industry": "industry",
-    "Exchange": "exchange",
-    "Is ETF?": "isEtf",
-    "Is Fund?": "isFund",
-    "Market Stage": "marketStage",
-    "YoY Growth (%)": "yoyGrowth",
-    "Profit Margin (%)": "profitMargin",
-    "R&D Ratio (%)": "rdRatio",
-    "Company Age (yrs)": "companyAge",
-    "Rule of 40": "ruleOf40",
-    "MVP Stage": "mvpStage",
-    # Misc Filters
-    "Stock Search": "stockSearch",
-    "Limit Results": "limit",
-}
-
-KEY_TO_LABEL = {v: k for k, v in LABEL_TO_KEY.items()}
+# These mappings are now imported from ``constants`` to make editing simpler.
 
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
@@ -102,23 +77,11 @@ class DraggableBlock(tk.Frame):
 
         label = self.preview_block._param_label
 
-        target_container = None
-        for c in self.app.containers:
-            cx0 = c.winfo_rootx()
-            cx1 = cx0 + c.winfo_width()
-            cy0 = c.winfo_rooty()
-            cy1 = cy0 + c.winfo_height()
-            if cx0 <= abs_x <= cx1 and cy0 <= abs_y <= cy1:
-                target_container = c
-                break
-
-        if dropped_in_zone or target_container:
-            if label == "Container" and not target_container:
-                self.app.add_container_block()
-            elif label in self.app.saved_algorithms:
+        if dropped_in_zone:
+            if label in self.app.saved_algorithms:
                 self.app.load_algorithm(label)
             else:
-                self.app.add_filter_block(label, container=target_container)
+                self.app.add_filter_block(label)
 
 
         # Destroy immediately after drawing (or skipping drop)
@@ -135,11 +98,6 @@ class DraggableBlock(tk.Frame):
         label_text = self.preview_block._param_label
         base_key = self.app.get_param_key_from_label(label_text)
 
-        if label_text == "Container":
-            clone = tk.Frame(self._drag_window, bg="#dfefff", relief="groove", bd=2, width=300, height=80)
-            clone.pack_propagate(False)
-            tk.Label(clone, text="Container", font=("Arial", 10, "bold"), bg="#dfefff").pack(expand=True)
-            return clone
 
         clone = tk.Frame(self._drag_window, bg="white", relief='solid', bd=1, width=300, height=80)
         clone.pack_propagate(False)
@@ -168,43 +126,9 @@ class DraggableBlock(tk.Frame):
         return clone
 
 
-class ContainerBlock(tk.Frame):
-    def __init__(self, master, app, name="Container"):
-        super().__init__(master, bg="#dfefff", relief="groove", bd=2)
-        self.app = app
-        self.name = name
-        header = tk.Frame(self, bg="#dfefff")
-        header.pack(fill="x")
-        tk.Label(header, text=name, font=("Arial", 10, "bold"), bg="#dfefff")\
-            .pack(side="left")
-        remove_btn = tk.Button(
-            header, text="✖", font=("Arial", 10), fg="red", bg="#dfefff",
-            relief="flat", command=self.remove_self
-        )
-        remove_btn.pack(side="right")
-
-        self.canvas = tk.Canvas(self, bg="#f0f8ff", height=150, highlightthickness=0)
-        self.canvas.pack(fill="both", expand=True, padx=5, pady=5)
-        self.snap_order = []
-
-    def add_filter_block(self, label, value=None):
-        frame = self.app._create_filter_block(self.canvas, self.snap_order, label, value)
-        self.reposition()
-        return frame
-
-    def reposition(self):
-        for i, (item_id, _) in enumerate(self.snap_order):
-            self.canvas.coords(item_id, 10, 30 + i * 90)
-
-    def remove_self(self):
-        for _, f in list(self.snap_order):
-            self.app.remove_filter_block(f, f._param_key, container=self)
-        self.app.containers = [c for c in self.app.containers if c != self]
-        self.app.snap_order = [t for t in self.app.snap_order if t[1] != self]
-        self.destroy()
-        self.app.reposition_snap_zone()
 
 class StockScreenerApp:
+    """Tkinter based stock screener using drag-and-drop filter blocks."""
     def __init__(self, root):
         self.root = root
         self.root.title("Block-Based Stock Screener")
@@ -219,17 +143,8 @@ class StockScreenerApp:
         self.result_tiles = {}  # Needed for render_stock_tile and cleanup
         self._income_cache = {}  # Cache for income statement data
         self.saved_algorithms = {}
-        self.containers = []
 
         self.setup_layout()
-
-    def add_container_block(self):
-        container = ContainerBlock(self.snap_zone, self)
-        item_id = self.snap_zone.create_window(10, 30 + len(self.snap_order) * 90, anchor='nw', window=container)
-        self.snap_order.append((item_id, container))
-        self.containers.append(container)
-        self.snap_zone_placeholder.place_forget()
-        self.reposition_snap_zone()
 
     def setup_layout(self):
         # === LEFT PANEL ===
@@ -309,7 +224,6 @@ class StockScreenerApp:
 
         # === FILTER PREVIEWS ===
         filters = [
-            ("Container", None),
             ("Stock Search", lambda: self.set_parameter("stockSearch", str)),
             ("Sector", lambda: self.open_dropdown("sector", ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
                                                             "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"])),
@@ -367,7 +281,7 @@ class StockScreenerApp:
 
         for label, callback in filters:
             param_key = self.get_param_key_from_label(label)
-            if label == "Container" or param_key in ["stockSearch", "limit"]:
+            if param_key in ["stockSearch", "limit"]:
                 categories["Tools"].append((label, callback))
             elif param_key in ["sector", "industry", "exchange", "isEtf", "isFund"]:
                 categories["Drop Down Filters"].append((label, callback))
@@ -404,39 +318,18 @@ class StockScreenerApp:
 
 
     def get_param_key_from_label(self, label):
+        """Return API parameter key for a given user facing label."""
         return LABEL_TO_KEY.get(label, label)
 
     def get_label_from_param_key(self, key):
+        """Return display label from an API parameter key."""
         base = key.split('_')[0]
         return KEY_TO_LABEL.get(base, base)
 
     def create_filter_preview_block(self, label, parent):
         base_key = self.get_param_key_from_label(label)
-        if label == "Container":
-            frame = tk.Frame(parent, bg="#dfefff", relief="groove", bd=2, width=300, height=80)
-            frame.pack_propagate(False)
-            tk.Label(frame, text="Container", font=("Arial", 10, "bold"), bg="#dfefff").pack(expand=True)
-            frame._param_label = label
-            return frame
-        options_map = {
-            "sector": ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
-                    "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"],
-            "industry": ["Software", "Oil & Gas", "Biotechnology", "Banks", "Retail", "Semiconductors"],
-            "country": ["US", "Canada", "Germany", "UK", "France", "India", "Japan", "China"],
-            "exchange": ["NASDAQ", "NYSE", "AMEX"],
-            "isEtf": ["true", "false"],
-            "isFund": ["true", "false"],
-            "isActivelyTrading": ["true", "false"],
-            "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Rule of 40: Growth + Margin >= 40%"],
-            "yoyGrowth": ["Annual", "Quarterly"],
-            "profitMargin": ["Annual", "Quarterly"],
-            "rdRatio": ["Annual", "Quarterly"],
-            "companyAge": None,
-            "ruleOf40": ["≥ 40"],
-            "mvpStage": ["Pre-product", "Early Product", "Scaling"]
-
-        }
+        # Configuration for dropdowns lives in ``FILTER_OPTIONS`` to avoid
+        # repeating the dictionaries in multiple places.
 
         frame = tk.Frame(parent, bg="white", relief='solid', bd=1, width=300, height=80)  # Container for filter preview blocks
         frame.pack_propagate(False)
@@ -445,10 +338,10 @@ class StockScreenerApp:
         title_row.pack(fill="x", pady=(5, 0), padx=8)
         tk.Label(title_row, text=label, font=("Arial", 10, "bold"), bg="white").pack(side="left")
 
-        if base_key in options_map:
+        if base_key in FILTER_OPTIONS:
             dropdown_row = tk.Frame(frame, bg="white")
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
-            options = options_map[base_key]
+            options = FILTER_OPTIONS[base_key]
             if options is None:
                 entry = tk.Entry(dropdown_row, font=("Arial", 10), state="disabled")
                 entry.insert(0, "")
@@ -488,24 +381,8 @@ class StockScreenerApp:
         count = sum(1 for _, f in order_list if f._param_key.startswith(base_key))
         key = f"{base_key}_{count+1}" if count else base_key
 
-        options_map = {
-            "sector": ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
-                    "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"],
-            "industry": ["Software", "Oil & Gas", "Biotechnology", "Banks", "Retail", "Semiconductors"],
-            "country": ["US", "Canada", "Germany", "UK", "France", "India", "Japan", "China"],
-            "exchange": ["NASDAQ", "NYSE", "AMEX"],
-            "isEtf": ["true", "false"],
-            "isFund": ["true", "false"],
-            "isActivelyTrading": ["true", "false"],
-            "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Rule of 40: Growth + Margin >= 40%"],
-            "yoyGrowth": ["Annual", "Quarterly"],
-            "profitMargin": ["Annual", "Quarterly"],
-            "rdRatio": ["Annual", "Quarterly"],
-            "companyAge": None,
-            "ruleOf40": ["≥ 40"],
-            "mvpStage": ["Pre-product", "Early Product", "Scaling"]
-        }
+        # Dropdown values are provided in ``FILTER_OPTIONS`` so the same list can
+        # be used across the application.
 
         block_frame = tk.Frame(canvas, bg="white", relief='solid', bd=1, width=300, height=80)
         block_frame.pack_propagate(False)
@@ -521,11 +398,11 @@ class StockScreenerApp:
         )
         remove_button.pack(side="right")
 
-        if base_key in options_map:
+        if base_key in FILTER_OPTIONS:
             dropdown_row = tk.Frame(block_frame, bg="white")
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
 
-            opts = options_map[base_key]
+            opts = FILTER_OPTIONS[base_key]
             if opts is None:
                 entry = tk.Entry(dropdown_row, font=("Arial", 10))
                 entry.pack(side="left", fill="x", expand=True)
@@ -647,13 +524,10 @@ class StockScreenerApp:
         order_list.append((item_id, block_frame))
         return block_frame
 
-    def add_filter_block(self, label, value=None, container=None):
-        if container is None:
-            frame = self._create_filter_block(self.snap_zone, self.snap_order, label, value)
-            self.snap_zone_placeholder.place_forget()
-            self.reposition_snap_zone()
-        else:
-            frame = container.add_filter_block(label, value)
+    def add_filter_block(self, label, value=None):
+        frame = self._create_filter_block(self.snap_zone, self.snap_order, label, value)
+        self.snap_zone_placeholder.place_forget()
+        self.reposition_snap_zone()
         return frame
 
     def reposition_snap_zone(self):
@@ -670,77 +544,20 @@ class StockScreenerApp:
             self.update_display()
             self.delayed_search()
         except Exception as e:
-            print(f"Slider error: {e}")
+            logging.error("Slider error: %s", e)
 
 
-    def remove_filter_block(self, frame, key, container=None):
+    def remove_filter_block(self, frame, key):
         frame.destroy()
 
         if key in self.params:
             del self.params[key]
 
-        if container is None:
-            self.snap_order = [(item_id, f) for item_id, f in self.snap_order if f != frame]
-            if not self.snap_order:
-                self.snap_zone_placeholder.place(relx=0.5, rely=0.5, anchor="center")
-            self.reposition_snap_zone()
-        else:
-            container.snap_order = [(item_id, f) for item_id, f in container.snap_order if f != frame]
-            container.reposition()
-
-    def open_save_algorithm_dialog(self):
-        if not self.params:
-            messagebox.showinfo("Save Algorithm", "Add filters to the workspace first.")
-            return
-
-        top = Toplevel(self.root)
-        top.title("Save Algorithm")
-        top.geometry("300x120")
-
-        tk.Label(top, text="Algorithm Name:").pack(pady=(10,0), padx=10, anchor="w")
-        name_entry = tk.Entry(top)
-        name_entry.pack(padx=10, fill="x")
-        name_entry.focus()
-
-        def submit():
-            name = name_entry.get().strip()
-            if not name:
-                return
-            self.saved_algorithms[name] = dict(self.params)
-            self._add_algorithm_preview(name)
-            top.destroy()
-
-        tk.Button(top, text="Save", command=submit).pack(pady=10)
-
-    def _add_algorithm_preview(self, name):
-        frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
-        frame.pack_propagate(False)
-        tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white").pack(fill="both", expand=True)
-
-        frame._param_label = name
-        DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
-        frame.pack(pady=4)
-
-    def load_algorithm(self, name):
-        params = self.saved_algorithms.get(name)
-        if not params:
-            return
-
-        # Clear existing workspace
-        for _, frame in self.snap_order:
-            frame.destroy()
-        self.snap_order.clear()
-        for c in list(self.containers):
-            c.destroy()
-        self.containers.clear()
-        self.params.clear()
-
-        for key, value in params.items():
-            label = self.get_label_from_param_key(key)
-            self.add_filter_block(label, value)
-
+        self.snap_order = [(item_id, f) for item_id, f in self.snap_order if f != frame]
+        if not self.snap_order:
+            self.snap_zone_placeholder.place(relx=0.5, rely=0.5, anchor="center")
         self.reposition_snap_zone()
-        self.update_display()
+
 
     def open_save_algorithm_dialog(self):
         if not self.params:
@@ -851,6 +668,8 @@ class StockScreenerApp:
         self._search_delay_id = self.root.after(delay_ms, self.search_stocks)
 
     def search_stocks(self):
+        """Query the API based on the current parameters and render results."""
+
         if "stockSearch" in self.params:
             symbol_fragment = self.params["stockSearch"]
             if len(symbol_fragment) < 1:
@@ -865,6 +684,8 @@ class StockScreenerApp:
             url += f"&apikey={self.api_key}"
             if "limit" not in self.params:
                 url += "&limit=20"
+
+        logging.debug("Requesting URL: %s", url)
 
         #if "limit" not in self.params:
             #url += "&limit=20"
@@ -1060,17 +881,20 @@ class StockScreenerApp:
 
     def get_historical_prices(self, symbol):
         try:
-            url = f"https://financialmodelingprep.com/api/v3/historical-chart/5min/{symbol}?apikey={self.api_key}"
+            url = (
+                f"https://financialmodelingprep.com/api/v3/historical-chart/5min/{symbol}?apikey={self.api_key}"
+            )
             response = requests.get(url)
             data = response.json()
 
-            print(f"[DEBUG] {symbol} returned {len(data)} entries")
-            print("[DEBUG] Sample date:", data[0]["date"] if data else "No data")
+            logging.debug("%s returned %d entries", symbol, len(data))
+            if data:
+                logging.debug("Sample date: %s", data[0]["date"])
 
             return [(datetime.strptime(item["date"], "%Y-%m-%d %H:%M:%S"), item["close"])
                     for item in reversed(data)]
         except Exception as e:
-            print(f"[ERROR] Failed to fetch history for {symbol}: {e}")
+            logging.error("Failed to fetch history for %s: %s", symbol, e)
             return []
 
     def render_stock_tile(self, symbol, quote_data, parent=None):
@@ -1175,8 +999,7 @@ class ResultDropdown(tk.Frame):
 
         except Exception as e:
             import traceback
-            print("[ERROR] Failed to draw chart:")
-            traceback.print_exc()  # This will print the real reason why it failed
+            logging.exception("Failed to draw chart:")
             tk.Label(self, text=f"Error rendering graph:\n{e}", fg="red").pack()
 
 if __name__ == "__main__":
