@@ -425,6 +425,7 @@ class StockScreenerApp:
 
             val_var = tk.StringVar(value="")
 
+            # use wider entry to accommodate comma separated market cap values
             entry_width = 6 if 'marketcap' not in key.lower() else 20
 
             val_entry = tk.Entry(
@@ -524,12 +525,12 @@ class StockScreenerApp:
                         self.update_display()
                     except ValueError:
                         self.params.pop(key, None)
-
                 val_entry.bind("<Return>", on_entry_return)
                 if value is not None:
                     val = max(min(value, to_), from_)
                     val_var.set(format_number(val))
                     self.params[key] = val
+
 
         # Add to snap zone
         item_id = self.snap_zone.create_window(10, 30 + len(self.snap_order) * 90, anchor='nw', window=block_frame)
