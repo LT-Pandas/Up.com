@@ -1,12 +1,49 @@
 import tkinter as tk
 from tkinter import simpledialog, messagebox, Toplevel, filedialog
 from tkinter import ttk
-import requests
+try:
+    import requests
+except Exception:  # pragma: no cover - optional dependency for tests
+    class _RequestsStub:
+        def get(self, *a, **k):
+            raise ModuleNotFoundError("requests is required to fetch remote data")
+
+    requests = _RequestsStub()
 import json
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
+try:
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    from matplotlib.figure import Figure
+    import matplotlib.dates as mdates
+except Exception:  # pragma: no cover - optional dependency for tests
+    FigureCanvasTkAgg = Figure = mdates = None
 from datetime import datetime
-import matplotlib.dates as mdates
+
+# Mapping between UI labels and parameter keys
+LABEL_TO_KEY = {
+    # Numeric filters
+    "Lower Price": "priceMoreThan",
+    "Upper Price": "priceLowerThan",
+    "Lower Market Cap": "marketCapMoreThan",
+    "Upper Market Cap": "marketCapLowerThan",
+    "Lower Volume": "volumeMoreThan",
+    "Upper Volume": "volumeLowerThan",
+    "Lower Beta": "betaMoreThan",
+    "Upper Beta": "betaLowerThan",
+    "Lower Dividend": "dividendMoreThan",
+    "Upper Dividend": "dividendLowerThan",
+    # Dropdowns + Boolean filters
+    "Sector": "sector",
+    "Industry": "industry",
+    "Exchange": "exchange",
+    "Is ETF?": "isEtf",
+    "Is Fund?": "isFund",
+    "Market Stage": "marketStage",
+    # Misc Filters
+    "Stock Search": "stockSearch",
+    "Limit Results": "limit",
+}
+
+KEY_TO_LABEL = {v: k for k, v in LABEL_TO_KEY.items()}
 
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
@@ -59,7 +96,10 @@ class DraggableBlock(tk.Frame):
 
         if dropped_in_zone:
             label = self.preview_block._param_label
-            self.app.add_filter_block(label)
+            if label in self.app.saved_algorithms:
+                self.app.load_algorithm(label)
+            else:
+                self.app.add_filter_block(label)
 
         # Destroy immediately after drawing (or skipping drop)
         if self._drag_window:
@@ -88,7 +128,7 @@ class DraggableBlock(tk.Frame):
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
             combo = ttk.Combobox(dropdown_row, font=("Arial", 10), state="disabled")
             if base_key == "marketStage":
-                combo.set("Product Market Fit [Rule of 40]")
+                combo.set("Rule of 40: Growth + Margin >= 40%")
             else:
                 combo.set("")  # Leave blank for all other dropdowns
 
@@ -115,6 +155,7 @@ class StockScreenerApp:
         self.snap_order = []
         self.result_tiles = {}  # Needed for render_stock_tile and cleanup
         self._income_cache = {}  # Cache for income statement data
+        self.saved_algorithms = {}
 
         self.setup_layout()
 
@@ -214,7 +255,7 @@ class StockScreenerApp:
             ("Lower Volume", lambda: self.set_parameter("volumeMoreThan", float)),
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Limit Results", lambda: self.set_parameter("limit", int)),
-            ("Market Stage", lambda: self.open_dropdown("marketStage", ["Product Market Fit [Rule of 40]"]))
+            ("Market Stage", lambda: self.open_dropdown("marketStage", ["Rule of 40: Growth + Margin >= 40%"]))
         ]
 
         categories = {
@@ -222,6 +263,28 @@ class StockScreenerApp:
             "Drop Down Filters": [],
             "Numeric Filters": []
         }
+
+        algo_btn = tk.Button(
+            self.block_scroll,
+            text="＋ Save Algorithm",
+            bg="#cce5ff", fg="#004085",
+            font=("Arial", 10, "bold"),
+            command=self.open_save_algorithm_dialog
+        )
+        algo_btn.pack(padx=10, pady=(5, 15), fill="x")
+
+        self.algo_header = tk.Label(
+            self.block_scroll,
+            text="Saved Algorithms",
+            bg="#e2e3e5",
+            font=("Arial", 10, "bold"),
+            anchor="w",
+            width=37
+        )
+        self.algo_header.pack(padx=10, pady=(10, 2))
+
+        self.algo_container = tk.Frame(self.block_scroll, bg="#f0f0f0")
+        self.algo_container.pack(fill="x", padx=10)
 
         for label, callback in filters:
             param_key = self.get_param_key_from_label(label)
@@ -262,30 +325,11 @@ class StockScreenerApp:
 
 
     def get_param_key_from_label(self, label):
-        lookup = {
-            # Numeric filters
-            "Lower Price": "priceMoreThan",
-            "Upper Price": "priceLowerThan",
-            "Lower Market Cap": "marketCapMoreThan",
-            "Upper Market Cap": "marketCapLowerThan",
-            "Lower Volume": "volumeMoreThan",
-            "Upper Volume": "volumeLowerThan",
-            "Lower Beta": "betaMoreThan",
-            "Upper Beta": "betaLowerThan",
-            "Lower Dividend": "dividendMoreThan",
-            "Upper Dividend": "dividendLowerThan",
-            # Dropdowns + Boolean filters
-            "Sector": "sector",
-            "Industry": "industry",
-            "Exchange": "exchange",
-            "Is ETF?": "isEtf",
-            "Is Fund?": "isFund",
-            "Market Stage": "marketStage",
-            # Misc Filters
-            "Stock Search": "stockSearch",
-            "Limit Results": "limit"
-        }
-        return lookup.get(label, label)
+        return LABEL_TO_KEY.get(label, label)
+
+    def get_label_from_param_key(self, key):
+        base = key.split('_')[0]
+        return KEY_TO_LABEL.get(base, base)
 
     def create_filter_preview_block(self, label, parent):
         base_key = self.get_param_key_from_label(label)
@@ -297,8 +341,9 @@ class StockScreenerApp:
             "exchange": ["NASDAQ", "NYSE", "AMEX"],
             "isEtf": ["true", "false"],
             "isFund": ["true", "false"],
+            "isActivelyTrading": ["true", "false"],
             "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Product Market Fit [Rule of 40]"]
+            "marketStage": ["Rule of 40: Growth + Margin >= 40%"]
 
         }
 
@@ -339,7 +384,7 @@ class StockScreenerApp:
         frame._param_label = label  # used for dragging
         return frame
 
-    def add_filter_block(self, label):
+    def add_filter_block(self, label, value=None):
         base_key = self.get_param_key_from_label(label)
 
         # Assign a unique key
@@ -354,8 +399,9 @@ class StockScreenerApp:
             "exchange": ["NASDAQ", "NYSE", "AMEX"],
             "isEtf": ["true", "false"],
             "isFund": ["true", "false"],
+            "isActivelyTrading": ["true", "false"],
             "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Product Market Fit [Rule of 40]"]
+            "marketStage": ["Rule of 40: Growth + Margin >= 40%"]
         }
 
         block_frame = tk.Frame(self.snap_zone, bg="white", relief='solid', bd=1, width=300, height=80)
@@ -377,7 +423,7 @@ class StockScreenerApp:
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
 
             combo = ttk.Combobox(dropdown_row, values=options_map[base_key], font=("Arial", 10), state="readonly")
-            combo.set("")  # Start blank
+            combo.set(value if value is not None else "")
             combo.pack(side="left", fill="x", expand=True)
 
             def update_selection(event):
@@ -389,6 +435,8 @@ class StockScreenerApp:
                 self.delayed_search()  # use this instead of update_display()
 
             combo.bind("<<ComboboxSelected>>", update_selection)
+            if value is not None:
+                self.params[key] = value
 
         elif base_key == "stockSearch":
             search_row = tk.Frame(block_frame, bg="white")
@@ -396,6 +444,9 @@ class StockScreenerApp:
 
             entry = tk.Entry(search_row, font=("Arial", 10))
             entry.pack(side="left", fill="x", expand=True)
+            if value is not None:
+                entry.insert(0, str(value))
+                self.params[key] = value
 
             self._stock_search_delay_id = None
 
@@ -426,7 +477,7 @@ class StockScreenerApp:
             if 'price' in key.lower():
                 from_, to_, resolution = 0, 1000, 1
             elif 'marketcap' in key.lower():
-                from_, to_, resolution = 0, 10_000_000_000_000, 1_000_000
+                from_, to_, resolution = 0, 1_000_000_000_000, 1_000_000
             elif 'beta' in key.lower():
                 from_, to_, resolution = -2, 5, 0.1
             elif 'volume' in key.lower():
@@ -466,6 +517,10 @@ class StockScreenerApp:
             slider.config(command=on_slider_move)
             slider.bind("<ButtonRelease-1>", on_slider_release)
             val_entry.bind("<Return>", on_entry_return)
+            if value is not None:
+                slider.set(value)
+                val_var.set(f"{float(value):.2f}")
+                self.params[key] = value
 
         # Add to snap zone
         item_id = self.snap_zone.create_window(10, 30 + len(self.snap_order) * 90, anchor='nw', window=block_frame)
@@ -503,6 +558,57 @@ class StockScreenerApp:
 
         self.reposition_snap_zone()
 
+    def open_save_algorithm_dialog(self):
+        if not self.params:
+            messagebox.showinfo("Save Algorithm", "Add filters to the workspace first.")
+            return
+
+        top = Toplevel(self.root)
+        top.title("Save Algorithm")
+        top.geometry("300x120")
+
+        tk.Label(top, text="Algorithm Name:").pack(pady=(10,0), padx=10, anchor="w")
+        name_entry = tk.Entry(top)
+        name_entry.pack(padx=10, fill="x")
+        name_entry.focus()
+
+        def submit():
+            name = name_entry.get().strip()
+            if not name:
+                return
+            self.saved_algorithms[name] = dict(self.params)
+            self._add_algorithm_preview(name)
+            top.destroy()
+
+        tk.Button(top, text="Save", command=submit).pack(pady=10)
+
+    def _add_algorithm_preview(self, name):
+        frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
+        frame.pack_propagate(False)
+        tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white").pack(fill="both", expand=True)
+
+        frame._param_label = name
+        DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
+        frame.pack(pady=4)
+
+    def load_algorithm(self, name):
+        params = self.saved_algorithms.get(name)
+        if not params:
+            return
+
+        # Clear existing workspace
+        for _, frame in self.snap_order:
+            frame.destroy()
+        self.snap_order.clear()
+        self.params.clear()
+
+        for key, value in params.items():
+            label = self.get_label_from_param_key(key)
+            self.add_filter_block(label, value)
+
+        self.reposition_snap_zone()
+        self.update_display()
+
     def open_dropdown(self, key, options):
         def submit_selection():
             selected = combo.get()
@@ -539,169 +645,147 @@ class StockScreenerApp:
         self._search_delay_id = self.root.after(delay_ms, self.search_stocks)
 
     def search_stocks(self):
-        # === RULE OF 40 OVERRIDE ===
-        if any("marketStage" in k for k in self.params):
-            base_screen_url = self.base_url + 'isActivelyTrading=true&' + '&'.join(
+        if "stockSearch" in self.params:
+            symbol_fragment = self.params["stockSearch"]
+            if len(symbol_fragment) < 1:
+                return
+            url = f"https://financialmodelingprep.com/api/v3/search?query={symbol_fragment}&limit=10&exchange=NASDAQ&apikey={self.api_key}"
+        else:
+            url = self.base_url + '&'.join(
                 f"{key}={str(val).lower() if isinstance(val, bool) else val}"
-                for key, val in self.params.items()
-                if key != "marketStage" and val not in ["", None]
+                for key, val in self.params.items() if val not in ["", None]
             )
 
-            matching_stocks = []
-            limit_per_page = 100
-            max_pages = 5
-            offset = 0
+            url += f"&apikey={self.api_key}"
+            if "limit" not in self.params:
+                url += "&limit=20"
 
-            try:
-                while len(matching_stocks) < 20 and offset < limit_per_page * max_pages:
-                    paged_url = f"{base_screen_url}&limit={limit_per_page}&offset={offset}&apikey={self.api_key}"
-                    response = requests.get(paged_url)
+        #if "limit" not in self.params:
+            #url += "&limit=20"
+
+        try:
+            response = requests.get(url)
+            data = response.json()
+
+            if any("marketStage" in k for k in self.params):
+                base_screen_url = self.base_url + '&'.join(
+                    f"{key}={str(val).lower() if isinstance(val, bool) else val}"
+                    for key, val in self.params.items()
+                    if key != "marketStage" and val not in ["", None]
+                )
+                base_screen_url += f"&apikey={self.api_key}&limit=100"
+
+                try:
+                    response = requests.get(base_screen_url)
                     screener_data = response.json()
 
-                    if not isinstance(screener_data, list):
-                        raise ValueError(f"Unexpected response format:\n{screener_data}")
-
-                    if not screener_data:
-                        break
-
-                    # Optionally filter before requesting income statements (e.g., large caps only)
-                    candidates = [stock for stock in screener_data if stock.get("marketCap") and float(stock["marketCap"]) > 1e9]
+                    matching_stocks = []
+                    import concurrent.futures
 
                     def fetch_income(symbol):
                         if symbol in self._income_cache:
                             return symbol, self._income_cache[symbol]
+
                         try:
-                            url = f"https://financialmodelingprep.com/api/v3/income-statement/{symbol}?period=annual&limit=2&apikey={self.api_key}"
+                            url = (
+                                f"https://financialmodelingprep.com/api/v3/income-statement/"
+                                f"{symbol}?period=quarter&limit=6&apikey={self.api_key}"
+                            )
                             data = requests.get(url, timeout=3).json()
                             self._income_cache[symbol] = data
                             return symbol, data
                         except Exception:
                             return symbol, []
 
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                        futures = [executor.submit(fetch_income, stock["symbol"]) for stock in candidates]
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+                        futures = [executor.submit(fetch_income, stock["symbol"]) for stock in screener_data]
                         income_results = {}
                         for future in concurrent.futures.as_completed(futures):
-                            symbol, data = future.result()
-                            if len(data) >= 2:
-                                try:
-                                    rev_now = float(data[0].get("revenue") or 0)
-                                    rev_last = float(data[1].get("revenue") or 0)
-                                    net_now = float(data[0].get("netIncome") or 0)
-                                    if rev_now == 0 or rev_last == 0:
-                                        continue
-                                    growth = (rev_now - rev_last) / rev_last * 100
-                                    margin = (net_now / rev_now) * 100
-                                    if growth + margin >= 40:
-                                        match = next((s for s in screener_data if s["symbol"] == symbol), None)
-                                        if match:
-                                            matching_stocks.append(match)
-                                            if len(matching_stocks) >= 20:
-                                                break
-                                except Exception:
+                            symbol, inc_data = future.result()
+                            if inc_data:
+                                income_results[symbol] = inc_data
+
+                        for stock in screener_data:
+                            symbol = stock["symbol"]
+                            income_data = income_results.get(symbol, [])
+
+                            if len(income_data) < 5:
+                                continue
+
+                            try:
+                                q0, q1, q2, q3, q4 = income_data[:5]
+
+                                rev0 = float(q0.get("revenue") or 0)
+                                rev1 = float(q1.get("revenue") or 0)
+                                rev2 = float(q2.get("revenue") or 0)
+                                rev3 = float(q3.get("revenue") or 0)
+                                rev4 = float(q4.get("revenue") or 0)
+
+                                net0 = float(q0.get("netIncome") or 0)
+                                net1 = float(q1.get("netIncome") or 0)
+
+                                if any(v == 0 for v in [rev0, rev1, rev2, rev3, rev4]):
                                     continue
 
-                    offset += limit_per_page
+                                growth0 = (rev0 - rev1) / rev1 * 100
+                                growth1 = (rev1 - rev2) / rev2 * 100
+                                margin0 = (net0 / rev0) * 100
+                                margin1 = (net1 / rev1) * 100
 
-                data = matching_stocks
+                                rule40_avg = ((growth0 + margin0) + (growth1 + margin1)) / 2
 
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed Market Stage filter:\n{e}")
-                return
+                                flat_prev1 = (rev2 - rev3) / rev3 * 100
+                                flat_prev2 = (rev3 - rev4) / rev4 * 100
 
+                                if (
+                                    rule40_avg >= 40
+                                    and abs(flat_prev1) <= 5
+                                    and abs(flat_prev2) <= 5
+                                ):
+                                    matching_stocks.append(stock)
+                                    if len(matching_stocks) >= 20:
+                                        break
 
-        # === DEFAULT BEHAVIOR ===
-        else:
-            if "stockSearch" in self.params:
-                symbol_fragment = self.params["stockSearch"]
-                if len(symbol_fragment) < 1:
+                            except Exception:
+                                continue
+
+                    data = matching_stocks
+
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed Market Stage filter:\n{e}")
                     return
-                url = f"https://financialmodelingprep.com/api/v3/search?query={symbol_fragment}&limit=10&exchange=NASDAQ&apikey={self.api_key}"
-            else:
-                url = self.base_url + 'isActivelyTrading=true&' + '&'.join(
-                    f"{key}={str(val).lower() if isinstance(val, bool) else val}"
-                    for key, val in self.params.items() if val not in ["", None]
-                )
 
-                url += f"&apikey={self.api_key}"
-                if "limit" not in self.params:
-                    url += "&limit=20"
-
-            try:
-                response = requests.get(url)
-                data = response.json()
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to fetch data:\n{e}")
-                return
-
-        # === COMMON RENDERING ===
-        try:
-            for widget in self.results_frame.winfo_children():
-                widget.destroy()
-            self.root.after(50, lambda: self.results_canvas.yview_moveto(0))
-
-            if isinstance(data, list) and data:
-                symbols = [item.get("symbol", "") for item in data if "symbol" in item]
-                quote_url = f"{self.quote_url}{','.join(symbols)}?apikey={self.api_key}"
-                quote_data = requests.get(quote_url).json()
-                quote_map = {q["symbol"]: q for q in quote_data if "symbol" in q}
-
-                for item in data:
-                    symbol = item.get('symbol', 'N/A')
-                    quote = quote_map.get(symbol, {})
-                    name = item.get('name') or quote.get('name', 'Unknown Company')
-                    price = quote.get('price', 0)
-                    change = quote.get('changesPercentage', 0)
-
-                    price_color = "green" if change >= 0 else "red"
-                    frame = tk.Frame(self.results_frame, bd=1, relief="solid", bg="white")
-                    frame.pack(padx=8, pady=6, fill="x")
-
-                    remove_btn = tk.Button(frame, text="✖", font=("Arial", 10), fg="red", bg="white", relief="flat",
-                        command=lambda f=frame: f.destroy())
-                    remove_btn.place(relx=1.0, x=-16, y=4, anchor="ne")
-
-                    dropdown_frame = [None]
-
-                    def toggle_dropdown(dropdown_list, container, btn, symbol, quote):
-                        if dropdown_list[0] is None:
-                            price_history = self.get_historical_prices(symbol)
-                            dropdown = ResultDropdown(container, symbol=symbol, quote_data=quote, price_history=price_history)
-                            dropdown.pack(fill="x", padx=10, pady=(5, 10))
-                            dropdown_list[0] = dropdown
-                            btn.config(text="▲")
-                        else:
-                            if dropdown_list[0].winfo_ismapped():
-                                dropdown_list[0].pack_forget()
-                                btn.config(text="▼")
-                            else:
-                                dropdown_list[0].pack(fill="x", padx=10, pady=(5, 10))
-                                btn.config(text="▲")
-
-                    top_row = tk.Frame(frame, bg="white")
-                    top_row.pack(fill="x", padx=10, pady=(5, 0))
-                    tk.Label(top_row, text=symbol, font=("Arial", 18, "bold"), fg="black", bg="white").pack(side="left")
-                    tk.Label(top_row, text=f"{price:.2f}", font=("Arial", 18, "bold"), fg=price_color, bg="white").pack(side="right")
-
-                    bottom_row = tk.Frame(frame, bg="white")
-                    bottom_row.pack(fill="x", padx=10, pady=(3, 8))
-                    tk.Label(bottom_row, text=name, font=("Arial", 9), fg="gray", bg="white",
-                            justify="left", anchor="w").pack(side="left", fill="x", expand=True)
-
-                    toggle_btn = tk.Button(bottom_row, text="▼", font=("Arial", 10), bg="white", relief="flat")
-                    toggle_btn.pack(side="right")
-                    toggle_btn.config(command=lambda btn=toggle_btn, df=dropdown_frame, f=frame, s=symbol, q=quote: toggle_dropdown(df, f, btn, s, q))
-
-            else:
-                tk.Label(
-                    self.results_frame,
-                    text="No results found or error in response.",
-                    bg="white", fg="gray", font=("Arial", 11, "italic")
-                ).pack(pady=20)
+            self.render_results(data)
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to render data:\n{e}")
+            messagebox.showerror("Error", f"Failed to fetch data:\n{e}")
+
+    def render_results(self, data):
+        # Clear old tiles
+        for widget in self.results_frame.winfo_children():
+            widget.destroy()
+
+        self.root.after(50, lambda: self.results_canvas.yview_moveto(0))
+
+        if isinstance(data, list) and data:
+            symbols = [item.get("symbol", "") for item in data if "symbol" in item]
+            quote_url = f"{self.quote_url}{','.join(symbols)}?apikey={self.api_key}"
+            quote_data = requests.get(quote_url).json()
+            quote_map = {q["symbol"]: q for q in quote_data if "symbol" in q}
+
+            for item in data:
+                symbol = item.get('symbol', 'N/A')
+                quote = quote_map.get(symbol, {})
+                # prefer name from item when available
+                if item.get('name'):
+                    quote = {**quote, 'name': item['name']}
+                self.render_stock_tile(symbol, quote)
+        else:
+            tk.Label(
+                self.results_frame,
+                text="No results found or error in response.",
+                bg="white", fg="gray", font=("Arial", 11, "italic")
+            ).pack(pady=20)
 
     def get_historical_prices(self, symbol):
         try:
