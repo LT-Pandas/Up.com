@@ -1,9 +1,11 @@
 """Main application module for the block-based stock screener."""
 
 import tkinter as tk
-from tkinter import messagebox, Toplevel
+from tkinter import messagebox, Toplevel, simpledialog
 from tkinter import ttk
 import logging
+import os
+import json
 from constants import LABEL_TO_KEY, KEY_TO_LABEL, FILTER_OPTIONS
 
 logging.basicConfig(level=logging.INFO)
@@ -167,6 +169,15 @@ class ContainerBlock(tk.Frame):
         self.reposition()
         return frame
 
+    def add_container_block(self):
+        container = ContainerBlock(self.canvas, self.app)
+        item_id = self.canvas.create_window(10, 30 + len(self.snap_order) * 90,
+                                            anchor='nw', window=container)
+        self.snap_order.append((item_id, container))
+        self.app.containers.append(container)
+        self.reposition()
+        return container
+
     def reposition(self):
         for i, (item_id, _) in enumerate(self.snap_order):
             self.canvas.coords(item_id, 10, 30 + i * 90)
@@ -206,6 +217,7 @@ class StockScreenerApp:
         self.containers.append(container)
         self.snap_zone_placeholder.place_forget()
         self.reposition_snap_zone()
+        return container
 
     def setup_layout(self):
         # === LEFT PANEL ===
@@ -258,6 +270,11 @@ class StockScreenerApp:
         # === RIGHT RESULTS PANEL ===
         self.right_frame = tk.Frame(self.root)
         self.right_frame.pack(side="right", fill="both", expand=True)
+
+        # --- new: Save Algorithm button ---
+        save_btn = tk.Button(self.right_frame, text="Save Algorithm",
+                             command=self.save_algorithm)
+        save_btn.pack(pady=5)
 
         self.results_container = tk.Frame(self.right_frame, bg="white")
         self.results_container.pack(fill="both", expand=True, padx=10, pady=10)
@@ -374,6 +391,18 @@ class StockScreenerApp:
                     app=self,
                     drop_target=self.block_area
                 )
+
+        # --- new: Load Algorithm dropdown ---
+        self.load_combo = ttk.Combobox(
+            self.block_scroll, state="readonly",
+            values=self._list_saved_algorithms()
+        )
+        self.load_combo.set("Load Algorithm")
+        self.load_combo.pack(padx=10, pady=(10, 15), fill="x")
+        self.load_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda e: self.load_algorithm(self.load_combo.get())
+        )
 
     def _on_results_mousewheel(self, event):
         self.results_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -632,6 +661,7 @@ class StockScreenerApp:
         else:
             container.snap_order = [(item_id, f) for item_id, f in container.snap_order if f != frame]
             container.reposition()
+
 
     def open_save_algorithm_dialog(self):
         if not self.params:
@@ -1075,6 +1105,71 @@ class StockScreenerApp:
         toggle_btn = tk.Button(bottom_row, text="▼", font=("Arial", 10), bg="white", relief="flat")
         toggle_btn.pack(side="right")
         toggle_btn.config(command=lambda b=toggle_btn: toggle_dropdown(b))
+
+    # --- new: algorithm serialization helpers ---
+    def save_algorithm(self):
+        nodes = [self._serialize_frame(f) for _, f in self.snap_order]
+        if not nodes:
+            messagebox.showinfo("Save Algorithm", "Add filters to the workspace first.")
+            return
+        name = simpledialog.askstring("Save Algorithm", "Algorithm name:")
+        if not name:
+            return
+        alg = CompositeAlgorithm(name, nodes)
+        os.makedirs("algorithms", exist_ok=True)
+        with open(os.path.join("algorithms", f"{name}.json"), "w") as fh:
+            json.dump(alg.to_dict(), fh, indent=2)
+        if hasattr(self, "load_combo"):
+            self.load_combo["values"] = self._list_saved_algorithms()
+
+    def load_algorithm(self, name):
+        path = os.path.join("algorithms", f"{name}.json")
+        if not os.path.isfile(path):
+            return
+        with open(path, "r") as fh:
+            data = json.load(fh)
+        alg = CompositeAlgorithm.from_dict(data)
+
+        for _, frame in list(self.snap_order):
+            frame.destroy()
+        self.snap_order.clear()
+        self.params.clear()
+        for c in list(self.containers):
+            c.destroy()
+        self.containers.clear()
+
+        for node in alg.nodes:
+            self._instantiate_node(node)
+        self.reposition_snap_zone()
+        self.update_display()
+
+    def _serialize_frame(self, frame):
+        if isinstance(frame, ContainerBlock):
+            children = [self._serialize_frame(f) for _, f in frame.snap_order]
+            return AlgorithmNode("container", children=children)
+        key = frame._param_key
+        base_key = key.split('_')[0]
+        return AlgorithmNode(base_key, self.params.get(key))
+
+    def _instantiate_node(self, node, container=None):
+        if node.key == "container":
+            if container is None:
+                cont = self.add_container_block()
+            else:
+                cont = container.add_container_block()
+            for child in node.children:
+                self._instantiate_node(child, cont)
+        else:
+            label = self.get_label_from_param_key(node.key)
+            if container is None:
+                self.add_filter_block(label, node.value)
+            else:
+                container.add_filter_block(label, node.value)
+
+    def _list_saved_algorithms(self):
+        if not os.path.isdir("algorithms"):
+            return []
+        return [f[:-5] for f in os.listdir("algorithms") if f.endswith(".json")]
     
     def remove_stock_tile(self, symbol):
         frame = self.result_tiles.pop(symbol, None)
@@ -1129,6 +1224,41 @@ class ResultDropdown(tk.Frame):
             import traceback
             logging.exception("Failed to draw chart:")
             tk.Label(self, text=f"Error rendering graph:\n{e}", fg="red").pack()
+
+
+# --- new helper classes ---
+class AlgorithmNode:
+    def __init__(self, key, value=None, children=None):
+        self.key = key
+        self.value = value
+        self.children = children or []
+
+    def to_dict(self):
+        data = {"key": self.key}
+        if self.value is not None:
+            data["value"] = self.value
+        if self.children:
+            data["children"] = [c.to_dict() for c in self.children]
+        return data
+
+    @classmethod
+    def from_dict(cls, data):
+        children = [cls.from_dict(d) for d in data.get("children", [])]
+        return cls(data.get("key"), data.get("value"), children)
+
+
+class CompositeAlgorithm:
+    def __init__(self, name, nodes=None):
+        self.name = name
+        self.nodes = nodes or []
+
+    def to_dict(self):
+        return {"name": self.name, "nodes": [n.to_dict() for n in self.nodes]}
+
+    @classmethod
+    def from_dict(cls, data):
+        nodes = [AlgorithmNode.from_dict(n) for n in data.get("nodes", [])]
+        return cls(data.get("name"), nodes)
 
 if __name__ == "__main__":
     root = tk.Tk()
