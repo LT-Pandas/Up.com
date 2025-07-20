@@ -1,6 +1,12 @@
+"""Main application module for the block-based stock screener."""
+
 import tkinter as tk
-from tkinter import simpledialog, messagebox, Toplevel, filedialog
+from tkinter import messagebox, Toplevel
 from tkinter import ttk
+import logging
+from constants import LABEL_TO_KEY, KEY_TO_LABEL, FILTER_OPTIONS
+
+logging.basicConfig(level=logging.INFO)
 try:
     import requests
 except Exception:  # pragma: no cover - optional dependency for tests
@@ -9,7 +15,6 @@ except Exception:  # pragma: no cover - optional dependency for tests
             raise ModuleNotFoundError("requests is required to fetch remote data")
 
     requests = _RequestsStub()
-import json
 try:
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
@@ -19,37 +24,7 @@ except Exception:  # pragma: no cover - optional dependency for tests
 from datetime import datetime
 
 # Mapping between UI labels and parameter keys
-LABEL_TO_KEY = {
-    # Numeric filters
-    "Lower Price": "priceMoreThan",
-    "Upper Price": "priceLowerThan",
-    "Lower Market Cap": "marketCapMoreThan",
-    "Upper Market Cap": "marketCapLowerThan",
-    "Lower Volume": "volumeMoreThan",
-    "Upper Volume": "volumeLowerThan",
-    "Lower Beta": "betaMoreThan",
-    "Upper Beta": "betaLowerThan",
-    "Lower Dividend": "dividendMoreThan",
-    "Upper Dividend": "dividendLowerThan",
-    # Dropdowns + Boolean filters
-    "Sector": "sector",
-    "Industry": "industry",
-    "Exchange": "exchange",
-    "Is ETF?": "isEtf",
-    "Is Fund?": "isFund",
-    "Market Stage": "marketStage",
-    "YoY Growth (%)": "yoyGrowth",
-    "Profit Margin (%)": "profitMargin",
-    "R&D Ratio (%)": "rdRatio",
-    "Company Age (yrs)": "companyAge",
-    "Rule of 40": "ruleOf40",
-    "MVP Stage": "mvpStage",
-    # Misc Filters
-    "Stock Search": "stockSearch",
-    "Limit Results": "limit",
-}
-
-KEY_TO_LABEL = {v: k for k, v in LABEL_TO_KEY.items()}
+# These mappings are now imported from ``constants`` to make editing simpler.
 
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
@@ -205,6 +180,7 @@ class ContainerBlock(tk.Frame):
         self.app.reposition_snap_zone()
 
 class StockScreenerApp:
+    """Tkinter based stock screener using drag-and-drop filter blocks."""
     def __init__(self, root):
         self.root = root
         self.root.title("Block-Based Stock Screener")
@@ -404,9 +380,11 @@ class StockScreenerApp:
 
 
     def get_param_key_from_label(self, label):
+        """Return API parameter key for a given user facing label."""
         return LABEL_TO_KEY.get(label, label)
 
     def get_label_from_param_key(self, key):
+        """Return display label from an API parameter key."""
         base = key.split('_')[0]
         return KEY_TO_LABEL.get(base, base)
 
@@ -418,25 +396,8 @@ class StockScreenerApp:
             tk.Label(frame, text="Container", font=("Arial", 10, "bold"), bg="#dfefff").pack(expand=True)
             frame._param_label = label
             return frame
-        options_map = {
-            "sector": ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
-                    "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"],
-            "industry": ["Software", "Oil & Gas", "Biotechnology", "Banks", "Retail", "Semiconductors"],
-            "country": ["US", "Canada", "Germany", "UK", "France", "India", "Japan", "China"],
-            "exchange": ["NASDAQ", "NYSE", "AMEX"],
-            "isEtf": ["true", "false"],
-            "isFund": ["true", "false"],
-            "isActivelyTrading": ["true", "false"],
-            "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Rule of 40: Growth + Margin >= 40%"],
-            "yoyGrowth": ["Annual", "Quarterly"],
-            "profitMargin": ["Annual", "Quarterly"],
-            "rdRatio": ["Annual", "Quarterly"],
-            "companyAge": None,
-            "ruleOf40": ["≥ 40"],
-            "mvpStage": ["Pre-product", "Early Product", "Scaling"]
-
-        }
+        # Configuration for dropdowns lives in ``FILTER_OPTIONS`` to avoid
+        # repeating the dictionaries in multiple places.
 
         frame = tk.Frame(parent, bg="white", relief='solid', bd=1, width=300, height=80)  # Container for filter preview blocks
         frame.pack_propagate(False)
@@ -445,10 +406,10 @@ class StockScreenerApp:
         title_row.pack(fill="x", pady=(5, 0), padx=8)
         tk.Label(title_row, text=label, font=("Arial", 10, "bold"), bg="white").pack(side="left")
 
-        if base_key in options_map:
+        if base_key in FILTER_OPTIONS:
             dropdown_row = tk.Frame(frame, bg="white")
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
-            options = options_map[base_key]
+            options = FILTER_OPTIONS[base_key]
             if options is None:
                 entry = tk.Entry(dropdown_row, font=("Arial", 10), state="disabled")
                 entry.insert(0, "")
@@ -488,24 +449,8 @@ class StockScreenerApp:
         count = sum(1 for _, f in order_list if f._param_key.startswith(base_key))
         key = f"{base_key}_{count+1}" if count else base_key
 
-        options_map = {
-            "sector": ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
-                    "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"],
-            "industry": ["Software", "Oil & Gas", "Biotechnology", "Banks", "Retail", "Semiconductors"],
-            "country": ["US", "Canada", "Germany", "UK", "France", "India", "Japan", "China"],
-            "exchange": ["NASDAQ", "NYSE", "AMEX"],
-            "isEtf": ["true", "false"],
-            "isFund": ["true", "false"],
-            "isActivelyTrading": ["true", "false"],
-            "includeAllShareClasses": ["true", "false"],
-            "marketStage": ["Rule of 40: Growth + Margin >= 40%"],
-            "yoyGrowth": ["Annual", "Quarterly"],
-            "profitMargin": ["Annual", "Quarterly"],
-            "rdRatio": ["Annual", "Quarterly"],
-            "companyAge": None,
-            "ruleOf40": ["≥ 40"],
-            "mvpStage": ["Pre-product", "Early Product", "Scaling"]
-        }
+        # Dropdown values are provided in ``FILTER_OPTIONS`` so the same list can
+        # be used across the application.
 
         block_frame = tk.Frame(canvas, bg="white", relief='solid', bd=1, width=300, height=80)
         block_frame.pack_propagate(False)
@@ -521,11 +466,11 @@ class StockScreenerApp:
         )
         remove_button.pack(side="right")
 
-        if base_key in options_map:
+        if base_key in FILTER_OPTIONS:
             dropdown_row = tk.Frame(block_frame, bg="white")
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
 
-            opts = options_map[base_key]
+            opts = FILTER_OPTIONS[base_key]
             if opts is None:
                 entry = tk.Entry(dropdown_row, font=("Arial", 10))
                 entry.pack(side="left", fill="x", expand=True)
@@ -670,7 +615,7 @@ class StockScreenerApp:
             self.update_display()
             self.delayed_search()
         except Exception as e:
-            print(f"Slider error: {e}")
+            logging.error("Slider error: %s", e)
 
 
     def remove_filter_block(self, frame, key, container=None):
@@ -851,6 +796,8 @@ class StockScreenerApp:
         self._search_delay_id = self.root.after(delay_ms, self.search_stocks)
 
     def search_stocks(self):
+        """Query the API based on the current parameters and render results."""
+
         if "stockSearch" in self.params:
             symbol_fragment = self.params["stockSearch"]
             if len(symbol_fragment) < 1:
@@ -865,6 +812,8 @@ class StockScreenerApp:
             url += f"&apikey={self.api_key}"
             if "limit" not in self.params:
                 url += "&limit=20"
+
+        logging.debug("Requesting URL: %s", url)
 
         #if "limit" not in self.params:
             #url += "&limit=20"
@@ -1060,17 +1009,20 @@ class StockScreenerApp:
 
     def get_historical_prices(self, symbol):
         try:
-            url = f"https://financialmodelingprep.com/api/v3/historical-chart/5min/{symbol}?apikey={self.api_key}"
+            url = (
+                f"https://financialmodelingprep.com/api/v3/historical-chart/5min/{symbol}?apikey={self.api_key}"
+            )
             response = requests.get(url)
             data = response.json()
 
-            print(f"[DEBUG] {symbol} returned {len(data)} entries")
-            print("[DEBUG] Sample date:", data[0]["date"] if data else "No data")
+            logging.debug("%s returned %d entries", symbol, len(data))
+            if data:
+                logging.debug("Sample date: %s", data[0]["date"])
 
             return [(datetime.strptime(item["date"], "%Y-%m-%d %H:%M:%S"), item["close"])
                     for item in reversed(data)]
         except Exception as e:
-            print(f"[ERROR] Failed to fetch history for {symbol}: {e}")
+            logging.error("Failed to fetch history for %s: %s", symbol, e)
             return []
 
     def render_stock_tile(self, symbol, quote_data, parent=None):
@@ -1175,8 +1127,7 @@ class ResultDropdown(tk.Frame):
 
         except Exception as e:
             import traceback
-            print("[ERROR] Failed to draw chart:")
-            traceback.print_exc()  # This will print the real reason why it failed
+            logging.exception("Failed to draw chart:")
             tk.Label(self, text=f"Error rendering graph:\n{e}", fg="red").pack()
 
 if __name__ == "__main__":
