@@ -271,7 +271,6 @@ class StockScreenerApp:
         self.right_frame = tk.Frame(self.root)
         self.right_frame.pack(side="right", fill="both", expand=True)
 
-
         self.results_container = tk.Frame(self.right_frame, bg="white")
         self.results_container.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -386,8 +385,6 @@ class StockScreenerApp:
                     app=self,
                     drop_target=self.block_area
                 )
-
-
 
     def _on_results_mousewheel(self, event):
         self.results_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -641,7 +638,103 @@ class StockScreenerApp:
             container.snap_order = [(item_id, f) for item_id, f in container.snap_order if f != frame]
             container.reposition()
 
+    def open_save_algorithm_dialog(self):
+        if not self.params:
+            messagebox.showinfo("Save Algorithm", "Add filters to the workspace first.")
+            return
 
+        top = Toplevel(self.root)
+        top.title("Save Algorithm")
+        top.geometry("300x120")
+
+        tk.Label(top, text="Algorithm Name:").pack(pady=(10,0), padx=10, anchor="w")
+        name_entry = tk.Entry(top)
+        name_entry.pack(padx=10, fill="x")
+        name_entry.focus()
+
+        def submit():
+            name = name_entry.get().strip()
+            if not name:
+                return
+            self.saved_algorithms[name] = dict(self.params)
+            self._add_algorithm_preview(name)
+            top.destroy()
+
+        tk.Button(top, text="Save", command=submit).pack(pady=10)
+
+    def _add_algorithm_preview(self, name):
+        frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
+        frame.pack_propagate(False)
+        tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white").pack(fill="both", expand=True)
+
+        frame._param_label = name
+        DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
+        frame.pack(pady=4)
+
+    def load_algorithm(self, name):
+        params = self.saved_algorithms.get(name)
+        if not params:
+            return
+
+        # Clear existing workspace
+        for _, frame in self.snap_order:
+            frame.destroy()
+        self.snap_order.clear()
+        for c in list(self.containers):
+            c.destroy()
+        self.containers.clear()
+        self.params.clear()
+
+        for key, value in params.items():
+            label = self.get_label_from_param_key(key)
+            self.add_filter_block(label, value)
+
+        self.reposition_snap_zone()
+        self.update_display()
+
+    def open_save_algorithm_dialog(self):
+        if not self.params:
+            messagebox.showinfo("Save Algorithm", "Add filters to the workspace first.")
+            return
+
+        top = Toplevel(self.root)
+        top.title("Save Algorithm")
+        top.geometry("300x120")
+
+        tk.Label(top, text="Algorithm Name:").pack(pady=(10,0), padx=10, anchor="w")
+        name_entry = tk.Entry(top)
+        name_entry.pack(padx=10, fill="x")
+        name_entry.focus()
+
+        def submit():
+            name = name_entry.get().strip()
+            if not name:
+                return
+            self.saved_algorithms[name] = dict(self.params)
+            self._add_algorithm_preview(name)
+            top.destroy()
+
+        tk.Button(top, text="Save", command=submit).pack(pady=10)
+
+    def _add_algorithm_preview(self, name):
+        frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
+        frame.pack_propagate(False)
+        tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white").pack(fill="both", expand=True)
+
+        frame._param_label = name
+        DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
+        frame.pack(pady=4)
+
+    def load_algorithm(self, name):
+        params = self.saved_algorithms.get(name)
+        if not params:
+            return
+
+        # Clear existing workspace
+        for _, frame in self.snap_order:
+            frame.destroy()
+        self.snap_order.clear()
+        self.params.clear()
 
     def open_dropdown(self, key, options):
         def submit_selection():
@@ -994,8 +1087,9 @@ class StockScreenerApp:
         os.makedirs("algorithms", exist_ok=True)
         with open(os.path.join("algorithms", f"{name}.json"), "w") as fh:
             json.dump(alg.to_dict(), fh, indent=2)
-        self.saved_algorithms[name] = os.path.join("algorithms", f"{name}.json")
-        self._add_algorithm_preview(name)
+            
+        if hasattr(self, "load_combo"):
+            self.load_combo["values"] = self._list_saved_algorithms()
 
     def load_algorithm(self, name):
         path = os.path.join("algorithms", f"{name}.json")
@@ -1049,7 +1143,12 @@ class StockScreenerApp:
                 self.add_filter_block(label, node.value)
             else:
                 container.add_filter_block(label, node.value)
-
+                
+    def _list_saved_algorithms(self):
+        if not os.path.isdir("algorithms"):
+            return []
+        return [f[:-5] for f in os.listdir("algorithms") if f.endswith(".json")]
+    
     def remove_stock_tile(self, symbol):
         frame = self.result_tiles.pop(symbol, None)
         if frame:
