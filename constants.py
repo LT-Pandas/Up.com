@@ -5,8 +5,8 @@ LABEL_TO_KEY = {
     # Numeric filters
     "Lower Price": "priceMoreThan",
     "Upper Price": "priceLowerThan",
-    "Lower Market Cap": "marketCapMoreThan",
-    "Upper Market Cap": "marketCapLowerThan",
+    "Lower Market Cap ($M)": "marketCapMoreThan",
+    "Upper Market Cap ($M)": "marketCapLowerThan",
     "Lower Volume": "volumeMoreThan",
     "Upper Volume": "volumeLowerThan",
     "Lower Beta": "betaMoreThan",

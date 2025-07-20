@@ -434,15 +434,42 @@ class StockScreenerApp:
             else:
                 from_, to_, resolution = 0, 200, 1
 
-            slider = tk.Scale(slider_row, from_=from_, to=to_, orient="horizontal",
-                            resolution=resolution, length=200)
+            slider = tk.Scale(
+                slider_row,
+                from_=from_,
+                to=to_,
+                orient="horizontal",
+                resolution=resolution,
+                length=200,
+            )
             slider.pack(side="left", fill="x", expand=True)
+
+            value_label = tk.Label(slider_row, text="", font=("Arial", 9), bg="white")
+            value_label.place(in_=slider, relx=0, y=-8, anchor="s")
+
+            def update_value_display(val):
+                try:
+                    numeric = float(val)
+                except ValueError:
+                    numeric = 0
+                if "marketcap" in key.lower():
+                    formatted = f"{int(round(numeric)):,}"
+                else:
+                    formatted = f"{numeric:.2f}"
+                value_label.config(text=formatted)
+                ratio = (numeric - from_) / (to_ - from_)
+                ratio = max(0, min(1, ratio))
+                value_label.place(in_=slider, relx=ratio, y=-8, anchor="s")
+
+            update_value_display(slider.get())
 
             def on_slider_move(val):
                 if 'marketcap' in key.lower():
                     val_var.set(f"{int(round(float(val))):,}")
                 else:
                     val_var.set(f"{float(val):.2f}")
+                update_value_display(val)
+
 
             def on_slider_release(event):
                 try:
@@ -451,6 +478,9 @@ class StockScreenerApp:
                         val = round(val / 1_000_000) * 1_000_000
                         slider.set(val)
                         val_var.set(f"{int(val):,}")
+
+                    update_value_display(val)
+
                     if key not in self.params or self.params[key] != val:
                         self.params[key] = val
                         self.update_display()
@@ -466,6 +496,7 @@ class StockScreenerApp:
                     self.params[key] = val
                     if 'marketcap' in key.lower():
                         val_var.set(f"{int(val):,}")
+                    update_value_display(val)
                     self.update_display()
                 except ValueError:
                     self.params.pop(key, None)
@@ -480,6 +511,7 @@ class StockScreenerApp:
                 else:
                     val_var.set(f"{float(value):.2f}")
                 self.params[key] = value
+                update_value_display(value)
 
         # Add to snap zone
         item_id = self.snap_zone.create_window(10, 30 + len(self.snap_order) * 90, anchor='nw', window=block_frame)
