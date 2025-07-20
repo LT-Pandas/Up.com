@@ -17,6 +17,13 @@ except Exception:  # pragma: no cover - optional dependency for tests
     FigureCanvasTkAgg = Figure = mdates = None
 from datetime import datetime
 
+def format_number(value: float) -> str:
+    """Return a human-readable string with comma separators."""
+    try:
+        return f"{int(round(float(value))):,}"
+    except Exception:
+        return str(value)
+
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
         super().__init__(master)
@@ -217,8 +224,8 @@ class StockScreenerApp:
             ("Is Fund?", lambda: self.open_dropdown("isFund", FILTER_OPTIONS["isFund"])),
             ("Lower Price", lambda: self.set_parameter("priceMoreThan", float)),
             ("Upper Price", lambda: self.set_parameter("priceLowerThan", float)),
-            ("Lower Market Cap", lambda: self.set_parameter("marketCapMoreThan", float)),
-            ("Upper Market Cap", lambda: self.set_parameter("marketCapLowerThan", float)),
+            ("Lower Market Cap ($M)", lambda: self.set_parameter("marketCapMoreThan", float)),
+            ("Upper Market Cap ($M)", lambda: self.set_parameter("marketCapLowerThan", float)),
             ("Lower Beta", lambda: self.set_parameter("betaMoreThan", float)),
             ("Upper Beta", lambda: self.set_parameter("betaLowerThan", float)),
             ("Lower Dividend", lambda: self.set_parameter("dividendMoreThan", float)),
@@ -416,7 +423,17 @@ class StockScreenerApp:
 
             val_var = tk.StringVar(value="")
 
-            val_entry = tk.Entry(slider_row, textvariable=val_var, width=6, justify="center", relief="groove", font=("Arial", 10))
+            # use wider entry to accommodate comma separated market cap values
+            entry_width = 6 if 'marketcap' not in key.lower() else 20
+
+            val_entry = tk.Entry(
+                slider_row,
+                textvariable=val_var,
+                width=entry_width,
+                justify="center",
+                relief="groove",
+                font=("Arial", 10),
+            )
             val_entry.pack(side="left", padx=(0, 10))
 
             if 'price' in key.lower():
@@ -453,9 +470,11 @@ class StockScreenerApp:
                 except ValueError:
                     numeric = 0
                 if "marketcap" in key.lower():
-                    formatted = f"{int(round(numeric)):,}"
+
+                    formatted = format_number(numeric)
                 else:
-                    formatted = f"{numeric:.2f}"
+                    formatted = f"{numeric:,.2f}"
+
                 value_label.config(text=formatted)
                 ratio = (numeric - from_) / (to_ - from_)
                 ratio = max(0, min(1, ratio))
@@ -465,11 +484,10 @@ class StockScreenerApp:
 
             def on_slider_move(val):
                 if 'marketcap' in key.lower():
-                    val_var.set(f"{int(round(float(val))):,}")
+                    val_var.set(format_number(val))
                 else:
-                    val_var.set(f"{float(val):.2f}")
+                    val_var.set(f"{float(val):,.2f}")
                 update_value_display(val)
-
 
             def on_slider_release(event):
                 try:
@@ -477,8 +495,8 @@ class StockScreenerApp:
                     if 'marketcap' in key.lower():
                         val = round(val / 1_000_000) * 1_000_000
                         slider.set(val)
-                        val_var.set(f"{int(val):,}")
 
+                        val_var.set(format_number(val))
                     update_value_display(val)
 
                     if key not in self.params or self.params[key] != val:
@@ -495,7 +513,8 @@ class StockScreenerApp:
                     slider.set(val)
                     self.params[key] = val
                     if 'marketcap' in key.lower():
-                        val_var.set(f"{int(val):,}")
+                        val_var.set(format_number(val))
+
                     update_value_display(val)
                     self.update_display()
                 except ValueError:
@@ -507,9 +526,11 @@ class StockScreenerApp:
             if value is not None:
                 slider.set(value)
                 if 'marketcap' in key.lower():
-                    val_var.set(f"{int(value):,}")
+
+                    val_var.set(format_number(value))
                 else:
-                    val_var.set(f"{float(value):.2f}")
+                    val_var.set(f"{float(value):,.2f}")
+
                 self.params[key] = value
                 update_value_display(value)
 
