@@ -17,6 +17,13 @@ except Exception:  # pragma: no cover - optional dependency for tests
     FigureCanvasTkAgg = Figure = mdates = None
 from datetime import datetime
 
+def format_number(value: float) -> str:
+    """Return a human-readable string with comma separators."""
+    try:
+        return f"{int(round(float(value))):,}"
+    except Exception:
+        return str(value)
+
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
         super().__init__(master)
@@ -217,8 +224,8 @@ class StockScreenerApp:
             ("Is Fund?", lambda: self.open_dropdown("isFund", FILTER_OPTIONS["isFund"])),
             ("Lower Price", lambda: self.set_parameter("priceMoreThan", float)),
             ("Upper Price", lambda: self.set_parameter("priceLowerThan", float)),
-            ("Lower Market Cap", lambda: self.set_parameter("marketCapMoreThan", float)),
-            ("Upper Market Cap", lambda: self.set_parameter("marketCapLowerThan", float)),
+            ("Lower Market Cap (10M-4T)", lambda: self.set_parameter("marketCapMoreThan", float)),
+            ("Upper Market Cap (10M-4T)", lambda: self.set_parameter("marketCapLowerThan", float)),
             ("Lower Beta", lambda: self.set_parameter("betaMoreThan", float)),
             ("Upper Beta", lambda: self.set_parameter("betaLowerThan", float)),
             ("Lower Dividend", lambda: self.set_parameter("dividendMoreThan", float)),
@@ -322,13 +329,15 @@ class StockScreenerApp:
         elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "beta", "dividend", "limit"]):
             slider_row = tk.Frame(frame, bg="white")
             slider_row.pack(fill="x", padx=10, pady=(2, 10))
-            val_entry = tk.Entry(slider_row, width=6, justify="center", relief="groove", font=("Arial", 10), state="disabled")
+            entry_width = 6 if "marketcap" not in base_key.lower() else 20
+            val_entry = tk.Entry(slider_row, width=entry_width, justify="center", relief="groove", font=("Arial", 10), state="disabled")
             val_entry.insert(0, "")
             val_entry.pack(side="left", padx=(0, 10))
 
-            slider = tk.Scale(slider_row, from_=0, to=1000, orient="horizontal", resolution=1, length=200, state="disabled")
-            slider.set(0)
-            slider.pack(side="left", fill="x", expand=True)
+            if "marketcap" not in base_key.lower():
+                slider = tk.Scale(slider_row, from_=0, to=1000, orient="horizontal", resolution=1, length=200, state="disabled")
+                slider.set(0)
+                slider.pack(side="left", fill="x", expand=True)
 
         elif base_key == "stockSearch":
             search_row = tk.Frame(frame, bg="white")
@@ -416,13 +425,22 @@ class StockScreenerApp:
 
             val_var = tk.StringVar(value="")
 
-            val_entry = tk.Entry(slider_row, textvariable=val_var, width=6, justify="center", relief="groove", font=("Arial", 10))
+            entry_width = 6 if 'marketcap' not in key.lower() else 20
+
+            val_entry = tk.Entry(
+                slider_row,
+                textvariable=val_var,
+                width=entry_width,
+                justify="center",
+                relief="groove",
+                font=("Arial", 10),
+            )
             val_entry.pack(side="left", padx=(0, 10))
 
-            if 'price' in key.lower():
+            if 'marketcap' in key.lower():
+                from_, to_, resolution = 10_000_000, 4_000_000_000_000, 1_000_000
+            elif 'price' in key.lower():
                 from_, to_, resolution = 0, 1000, 1
-            elif 'marketcap' in key.lower():
-                from_, to_, resolution = 0, 1_000_000_000_000, 1_000_000
             elif 'beta' in key.lower():
                 from_, to_, resolution = -2, 5, 0.1
             elif 'volume' in key.lower():
@@ -434,38 +452,84 @@ class StockScreenerApp:
             else:
                 from_, to_, resolution = 0, 200, 1
 
-            slider = tk.Scale(slider_row, from_=from_, to=to_, orient="horizontal",
-                            resolution=resolution, length=200)
-            slider.pack(side="left", fill="x", expand=True)
+            if 'marketcap' not in key.lower():
+                slider = tk.Scale(
+                    slider_row,
+                    from_=from_,
+                    to=to_,
+                    orient="horizontal",
+                    resolution=resolution,
+                    length=200,
+                )
+                slider.pack(side="left", fill="x", expand=True)
 
-            def on_slider_move(val):
-                val_var.set(f"{float(val):.2f}")
+                value_label = tk.Label(slider_row, text="", font=("Arial", 9), bg="white")
+                value_label.place(in_=slider, relx=0, y=-8, anchor="s")
 
-            def on_slider_release(event):
-                try:
-                    val = float(slider.get())
-                    if key not in self.params or self.params[key] != val:
+                def update_value_display(val):
+                    try:
+                        numeric = float(val)
+                    except ValueError:
+                        numeric = 0
+                    formatted = f"{numeric:,.2f}"
+                    value_label.config(text=formatted)
+                    ratio = (numeric - from_) / (to_ - from_)
+                    ratio = max(0, min(1, ratio))
+                    value_label.place(in_=slider, relx=ratio, y=-8, anchor="s")
+
+                update_value_display(slider.get())
+
+                def on_slider_move(val):
+                    val_var.set(f"{float(val):,.2f}")
+                    update_value_display(val)
+
+                def on_slider_release(event):
+                    try:
+                        val = float(slider.get())
+                        update_value_display(val)
+                        if key not in self.params or self.params[key] != val:
+                            self.params[key] = val
+                            self.update_display()
+                    except ValueError:
+                        self.params.pop(key, None)
+
+                def on_entry_return(event):
+                    try:
+                        val = float(val_var.get().replace(',', ''))
+                        slider.set(val)
                         self.params[key] = val
+                        update_value_display(val)
                         self.update_display()
-                except ValueError:
-                    self.params.pop(key, None)
+                    except ValueError:
+                        self.params.pop(key, None)
 
-            def on_entry_return(event):
-                try:
-                    val = float(val_var.get())
-                    slider.set(val)
+                slider.config(command=on_slider_move)
+                slider.bind("<ButtonRelease-1>", on_slider_release)
+                val_entry.bind("<Return>", on_entry_return)
+                if value is not None:
+                    slider.set(value)
+                    val_var.set(f"{float(value):,.2f}")
+                    self.params[key] = value
+                    update_value_display(value)
+            else:
+                def on_entry_return(event):
+                    try:
+                        val = float(val_var.get().replace(',', ''))
+                        val = round(val / 1_000_000) * 1_000_000
+                        val_var.set(format_number(val))
+                        if from_ <= val <= to_:
+                            self.params[key] = val
+                        else:
+                            self.params.pop(key, None)
+                        self.update_display()
+                    except ValueError:
+                        self.params.pop(key, None)
+
+                val_entry.bind("<Return>", on_entry_return)
+                if value is not None:
+                    val = max(min(value, to_), from_)
+                    val_var.set(format_number(val))
                     self.params[key] = val
-                    self.update_display()
-                except ValueError:
-                    self.params.pop(key, None)
-
-            slider.config(command=on_slider_move)
-            slider.bind("<ButtonRelease-1>", on_slider_release)
-            val_entry.bind("<Return>", on_entry_return)
-            if value is not None:
-                slider.set(value)
-                val_var.set(f"{float(value):.2f}")
-                self.params[key] = value
 
         # Add to snap zone
         item_id = self.snap_zone.create_window(10, 30 + len(self.snap_order) * 90, anchor='nw', window=block_frame)
