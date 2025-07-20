@@ -217,8 +217,8 @@ class StockScreenerApp:
             ("Is Fund?", lambda: self.open_dropdown("isFund", FILTER_OPTIONS["isFund"])),
             ("Lower Price", lambda: self.set_parameter("priceMoreThan", float)),
             ("Upper Price", lambda: self.set_parameter("priceLowerThan", float)),
-            ("Lower Market Cap", lambda: self.set_parameter("marketCapMoreThan", float)),
-            ("Upper Market Cap", lambda: self.set_parameter("marketCapLowerThan", float)),
+            ("Lower Market Cap ($M)", lambda: self.set_parameter("marketCapMoreThan", float)),
+            ("Upper Market Cap ($M)", lambda: self.set_parameter("marketCapLowerThan", float)),
             ("Lower Beta", lambda: self.set_parameter("betaMoreThan", float)),
             ("Upper Beta", lambda: self.set_parameter("betaLowerThan", float)),
             ("Lower Dividend", lambda: self.set_parameter("dividendMoreThan", float)),
@@ -422,7 +422,7 @@ class StockScreenerApp:
             if 'price' in key.lower():
                 from_, to_, resolution = 0, 1000, 1
             elif 'marketcap' in key.lower():
-                from_, to_, resolution = 0, 1_000_000_000_000, 1_000_000
+                from_, to_, resolution = 10_000_000, 10_000_000_000_000, 1_000_000
             elif 'beta' in key.lower():
                 from_, to_, resolution = -2, 5, 0.1
             elif 'volume' in key.lower():
@@ -439,11 +439,18 @@ class StockScreenerApp:
             slider.pack(side="left", fill="x", expand=True)
 
             def on_slider_move(val):
-                val_var.set(f"{float(val):.2f}")
+                if 'marketcap' in key.lower():
+                    val_var.set(f"{int(round(float(val))):,}")
+                else:
+                    val_var.set(f"{float(val):.2f}")
 
             def on_slider_release(event):
                 try:
                     val = float(slider.get())
+                    if 'marketcap' in key.lower():
+                        val = round(val / 1_000_000) * 1_000_000
+                        slider.set(val)
+                        val_var.set(f"{int(val):,}")
                     if key not in self.params or self.params[key] != val:
                         self.params[key] = val
                         self.update_display()
@@ -452,9 +459,13 @@ class StockScreenerApp:
 
             def on_entry_return(event):
                 try:
-                    val = float(val_var.get())
+                    val = float(val_var.get().replace(',', ''))
+                    if 'marketcap' in key.lower():
+                        val = round(val / 1_000_000) * 1_000_000
                     slider.set(val)
                     self.params[key] = val
+                    if 'marketcap' in key.lower():
+                        val_var.set(f"{int(val):,}")
                     self.update_display()
                 except ValueError:
                     self.params.pop(key, None)
@@ -464,7 +475,10 @@ class StockScreenerApp:
             val_entry.bind("<Return>", on_entry_return)
             if value is not None:
                 slider.set(value)
-                val_var.set(f"{float(value):.2f}")
+                if 'marketcap' in key.lower():
+                    val_var.set(f"{int(value):,}")
+                else:
+                    val_var.set(f"{float(value):.2f}")
                 self.params[key] = value
 
         # Add to snap zone
