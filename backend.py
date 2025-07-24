@@ -23,10 +23,19 @@ class StockDataService:
     def search(self, params: dict) -> list:
         """Return a list of search results based on provided parameters."""
         params = dict(params)
-        div_more = params.pop("dividendMoreThan", None)
-        div_less = params.pop("dividendLowerThan", None)
-        has_div_filter = div_more is not None or div_less is not None
-        limit_val = params.get("limit", 20)
+
+        div_more = params.get("dividendMoreThan")
+        div_less = params.get("dividendLowerThan")
+        try:
+            if div_more is not None:
+                params["dividendMoreThan"] = float(div_more) * 4
+        except Exception:
+            params.pop("dividendMoreThan", None)
+        try:
+            if div_less is not None:
+                params["dividendLowerThan"] = float(div_less) * 4
+        except Exception:
+            params.pop("dividendLowerThan", None)
 
         if "stockSearch" in params:
             symbol_fragment = params["stockSearch"]
