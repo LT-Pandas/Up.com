@@ -130,3 +130,17 @@ class StockDataService:
             ]
         except Exception:
             return []
+
+    def get_profile(self, symbol: str) -> dict:
+        """Return company profile data for the given symbol."""
+        try:
+            url = (
+                f"https://financialmodelingprep.com/api/v3/profile/{symbol}?apikey={self.api_key}"
+            )
+            response = requests.get(url)
+            data = response.json()
+            if isinstance(data, list):
+                return data[0] if data else {}
+            return data
+        except Exception:
+            return {}
