@@ -29,11 +29,6 @@ class StockDataService:
             if key in exclude or val in ["", None]:
                 continue
             base_key = key.split("_")[0]
-            if base_key in {"dividendMoreThan", "dividendLowerThan"}:
-                try:
-                    val = float(val) * 4
-                except Exception:
-                    pass
             part_val = str(val).lower() if isinstance(val, bool) else val
             parts.append(f"{base_key}={part_val}")
         query = "&".join(parts)
@@ -118,25 +113,6 @@ class StockDataService:
                     except Exception:
                         continue
             data = matching_stocks
-
-        # Enforce min quarterly dividend locally since the API uses dividend yield
-        div_key = next((k for k in params if k.split("_")[0] == "dividendMoreThan"), None)
-        if div_key:
-            try:
-                q_thresh = float(params[div_key])
-            except Exception:
-                q_thresh = None
-        else:
-            q_thresh = None
-
-        if q_thresh is not None:
-            filtered = []
-            for item in data:
-                annual_div = self._get_last_annual_dividend(item)
-                if annual_div / 4 >= q_thresh:
-                    filtered.append(item)
-            data = filtered
-
         return data
 
     def get_quotes(self, symbols: list[str]) -> list:
@@ -174,17 +150,6 @@ class StockDataService:
             return data
         except Exception:
             return {}
-
-    def _get_last_annual_dividend(self, item: dict) -> float:
-        """Return annual dividend from a screener or profile item."""
-        for key in ["lastAnnualDividend", "lastDiv", "lastDividend"]:
-            val = item.get(key)
-            if val not in [None, "", "N/A"]:
-                try:
-                    return float(val)
-                except Exception:
-                    pass
-        return 0.0
 
     def get_quarterly_dividend(self, symbol: str) -> float | None:
         """Return the most recent quarterly dividend for the given symbol."""
