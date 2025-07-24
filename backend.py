@@ -19,45 +19,47 @@ class StockDataService:
         self.quote_url = quote_url
         self._income_cache: dict[str, list] = {}
 
+    def _build_query(self, params: dict, exclude: set[str] | None = None,
+                     default_limit: int | None = 20) -> str:
+        """Convert params to a query string."""
+        exclude = exclude or set()
+        parts = []
+        for key, val in params.items():
+            if key in exclude or val in ["", None]:
+                continue
+            base_key = key.split("_")[0]
+            if base_key in {"dividendMoreThan", "dividendLowerThan"}:
+                try:
+                    val = float(val) * 4
+                except Exception:
+                    pass
+            part_val = str(val).lower() if isinstance(val, bool) else val
+            parts.append(f"{base_key}={part_val}")
+        query = "&".join(parts)
+        if default_limit is not None and "limit" not in params:
+            query += f"&limit={default_limit}"
+        return query
+
     def search(self, params: dict) -> list:
         """Return a list of search results based on provided parameters."""
         if "stockSearch" in params:
             symbol_fragment = params["stockSearch"]
-            if len(symbol_fragment) < 1:
+            if not symbol_fragment:
                 return []
             url = (
                 "https://financialmodelingprep.com/api/v3/search?"
                 f"query={symbol_fragment}&limit=10&exchange=NASDAQ&apikey={self.api_key}"
             )
         else:
-            parts = []
-            for key, val in params.items():
-                if val in ["", None]:
-                    continue
-                base_key = key.split("_")[0]
-                if base_key in {"dividendMoreThan", "dividendLowerThan"}:
-                    try:
-                        val = float(val) * 4
-                    except Exception:
-                        pass
-                parts.append(
-                    f"{base_key}={str(val).lower() if isinstance(val, bool) else val}"
-                )
-            url = self.base_url + "&".join(parts)
-            url += f"&apikey={self.api_key}"
-            if "limit" not in params:
-                url += "&limit=20"
+            query = self._build_query(params)
+            url = f"{self.base_url}{query}&apikey={self.api_key}"
 
         response = requests.get(url)
         data = response.json()
 
         if any("marketStage" in k for k in params):
-            base_screen_url = self.base_url + "&".join(
-                f"{key}={str(val).lower() if isinstance(val, bool) else val}"
-                for key, val in params.items()
-                if key != "marketStage" and val not in ["", None]
-            )
-            base_screen_url += f"&apikey={self.api_key}&limit=100"
+            query = self._build_query(params, exclude={"marketStage"}, default_limit=100)
+            base_screen_url = f"{self.base_url}{query}&apikey={self.api_key}"
             response = requests.get(base_screen_url)
             screener_data = response.json()
 
@@ -187,9 +189,6 @@ class StockDataService:
                 val = data[0].get("dividend")
                 if val not in [None, "", "N/A"]:
                     return float(val)
-        except Exception:
-            pass
-        return None
         except Exception:
             pass
         return None
