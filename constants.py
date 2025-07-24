@@ -47,8 +47,20 @@ def get_label_from_param_key(key: str) -> str:
 
 # Options for dropdown-based filters. ``None`` indicates a free text entry.
 FILTER_OPTIONS = {
-    "sector": ["Technology", "Energy", "Healthcare", "Financial Services", "Consumer Cyclical",
-                "Communication Services", "Industrials", "Basic Materials", "Real Estate", "Utilities"],
+    # Options for the sector dropdown in alphabetical order for easier browsing
+    "sector": [
+        "Basic Materials",
+        "Communication Services",
+        "Consumer Cyclical",
+        "Consumer Defensive",
+        "Energy",
+        "Financial Services",
+        "Healthcare",
+        "Industrials",
+        "Real Estate",
+        "Technology",
+        "Utilities",
+    ],
     "industry": ["Software", "Oil & Gas", "Biotechnology", "Banks", "Retail", "Semiconductors"],
     "country": ["US", "Canada", "Germany", "UK", "France", "India", "Japan", "China"],
     "exchange": ["NASDAQ", "NYSE", "AMEX"],
