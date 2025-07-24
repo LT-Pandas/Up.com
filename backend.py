@@ -18,10 +18,12 @@ class StockDataService:
         self.base_url = base_url
         self.quote_url = quote_url
         self._income_cache: dict[str, list] = {}
+        self._dividend_cache: dict[str, float] = {}
 
     def search(self, params: dict) -> list:
         """Return a list of search results based on provided parameters."""
         params = dict(params)
+
         div_more = params.get("dividendMoreThan")
         div_less = params.get("dividendLowerThan")
         try:
@@ -50,7 +52,9 @@ class StockDataService:
                 if val not in ["", None]
             )
             url += f"&apikey={self.api_key}"
-            if "limit" not in params:
+            if has_div_filter:
+                url += "&limit=100"
+            elif "limit" not in params:
                 url += "&limit=20"
 
         response = requests.get(url)
@@ -120,6 +124,41 @@ class StockDataService:
                     except Exception:
                         continue
             data = matching_stocks
+
+        if has_div_filter:
+            def fetch_div(symbol: str):
+                if symbol in self._dividend_cache:
+                    return symbol, self._dividend_cache[symbol]
+                val = self.get_next_quarter_dividend(symbol)
+
+                if val is None:
+                    val = self.get_quarterly_dividend(symbol)
+
+                if val is not None:
+                    self._dividend_cache[symbol] = val
+                return symbol, val
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+                futures = [executor.submit(fetch_div, s["symbol"]) for s in data]
+                div_results = {}
+                for future in concurrent.futures.as_completed(futures):
+                    sym, val = future.result()
+                    div_results[sym] = val
+
+            filtered = []
+            for stock in data:
+                sym = stock.get("symbol")
+                val = div_results.get(sym)
+                if val is None:
+                    continue
+                if div_more is not None and val < div_more:
+                    continue
+                if div_less is not None and val > div_less:
+                    continue
+                filtered.append(stock)
+                if len(filtered) >= limit_val:
+                    break
+            data = filtered
 
         return data
 
