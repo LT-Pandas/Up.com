@@ -113,10 +113,15 @@ class DraggableBlock(tk.Frame):
 
             combo.pack(fill="x")
         elif any(x in base_key.lower() for x in ["price", "marketcap", "volume", "beta", "dividend", "limit"]):
-            slider_row = tk.Frame(clone, bg="white")
-            slider_row.pack(fill="x", padx=10, pady=(2, 10))
-            tk.Entry(slider_row, width=6, justify="center", relief="groove", font=("Arial", 10), state="disabled").pack(side="left", padx=(0, 10))
-            tk.Scale(slider_row, from_=0, to=100, orient="horizontal", resolution=1, length=200, state="disabled").pack(side="left", fill="x", expand=True)
+            if "marketcap" in base_key.lower():
+                input_row = tk.Frame(clone, bg="white")
+                input_row.pack(fill="x", padx=10, pady=(5, 10))
+                tk.Entry(input_row, font=("Arial", 10), state="disabled").pack(side="left", fill="x", expand=True)
+            else:
+                slider_row = tk.Frame(clone, bg="white")
+                slider_row.pack(fill="x", padx=10, pady=(2, 10))
+                tk.Entry(slider_row, width=6, justify="center", relief="groove", font=("Arial", 10), state="disabled").pack(side="left", padx=(0, 10))
+                tk.Scale(slider_row, from_=0, to=100, orient="horizontal", resolution=1, length=200, state="disabled").pack(side="left", fill="x", expand=True)
 
         return clone
 
@@ -239,6 +244,7 @@ class StockScreenerApp:
         categories = {
             "Tools": [],
             "Drop Down Filters": [],
+            "Write in Filters": [],
             "Numeric Filters": []
         }
 
@@ -270,12 +276,14 @@ class StockScreenerApp:
                 categories["Tools"].append((label, callback))
             elif param_key in ["sector", "industry", "exchange", "isEtf", "isFund"]:
                 categories["Drop Down Filters"].append((label, callback))
+            elif param_key in ["marketCapMoreThan", "marketCapLowerThan"]:
+                categories["Write in Filters"].append((label, callback))
             else:
                 categories["Numeric Filters"].append((label, callback))
 
 
 
-        for cat in ["Tools", "Drop Down Filters", "Numeric Filters"]:
+        for cat in ["Tools", "Drop Down Filters", "Write in Filters", "Numeric Filters"]:
             group = categories[cat]
             header = tk.Label(
                 self.block_scroll,
@@ -327,14 +335,19 @@ class StockScreenerApp:
             combo.pack(side="left", fill="x", expand=True)
 
         elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "beta", "dividend", "limit"]):
-            slider_row = tk.Frame(frame, bg="white")
-            slider_row.pack(fill="x", padx=10, pady=(2, 10))
-            entry_width = 6 if "marketcap" not in base_key.lower() else 20
-            val_entry = tk.Entry(slider_row, width=entry_width, justify="center", relief="groove", font=("Arial", 10), state="disabled")
-            val_entry.insert(0, "")
-            val_entry.pack(side="left", padx=(0, 10))
+            if "marketcap" in base_key.lower():
+                input_row = tk.Frame(frame, bg="white")
+                input_row.pack(fill="x", padx=10, pady=(5, 10))
+                val_entry = tk.Entry(input_row, font=("Arial", 10), state="disabled")
+                val_entry.insert(0, "")
+                val_entry.pack(side="left", fill="x", expand=True)
+            else:
+                slider_row = tk.Frame(frame, bg="white")
+                slider_row.pack(fill="x", padx=10, pady=(2, 10))
+                val_entry = tk.Entry(slider_row, width=6, justify="center", relief="groove", font=("Arial", 10), state="disabled")
+                val_entry.insert(0, "")
+                val_entry.pack(side="left", padx=(0, 10))
 
-            if "marketcap" not in base_key.lower():
                 slider = tk.Scale(slider_row, from_=0, to=1000, orient="horizontal", resolution=1, length=200, state="disabled")
                 slider.set(0)
                 slider.pack(side="left", fill="x", expand=True)
@@ -420,40 +433,66 @@ class StockScreenerApp:
             entry.bind("<KeyRelease>", on_type)
 
         elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "beta", "dividend", "limit"]):
-            slider_row = tk.Frame(block_frame, bg="white")
-            slider_row.pack(fill="x", padx=10, pady=(2, 10))
-
             val_var = tk.StringVar(value="")
 
-            # use wider entry to accommodate comma separated market cap values
-            entry_width = 6 if 'marketcap' not in key.lower() else 20
-
-            val_entry = tk.Entry(
-                slider_row,
-                textvariable=val_var,
-                width=entry_width,
-                justify="center",
-                relief="groove",
-                font=("Arial", 10),
-            )
-            val_entry.pack(side="left", padx=(0, 10))
-
             if 'marketcap' in key.lower():
-                from_, to_, resolution = 10_000_000, 4_000_000_000_000, 1_000_000
-            elif 'price' in key.lower():
-                from_, to_, resolution = 0, 1000, 1
-            elif 'beta' in key.lower():
-                from_, to_, resolution = -2, 5, 0.1
-            elif 'volume' in key.lower():
-                from_, to_, resolution = 0, 1_000_000, 10_000
-            elif 'dividend' in key.lower():
-                from_, to_, resolution = 0, 20, 0.1
-            elif 'limit' in key.lower():
-                from_, to_, resolution = 0, 100, 1
-            else:
-                from_, to_, resolution = 0, 200, 1
+                input_row = tk.Frame(block_frame, bg="white")
+                input_row.pack(fill="x", padx=10, pady=(5, 10))
 
-            if 'marketcap' not in key.lower():
+                val_entry = tk.Entry(
+                    input_row,
+                    textvariable=val_var,
+                    font=("Arial", 10),
+                )
+                val_entry.pack(side="left", fill="x", expand=True)
+
+                from_, to_ = 10_000_000, 4_000_000_000_000
+
+                def on_entry_return(event):
+                    try:
+                        val = float(val_var.get().replace(',', ''))
+                        val = round(val / 1_000_000) * 1_000_000
+                        val_var.set(format_number(val))
+                        if from_ <= val <= to_:
+                            self.params[key] = val
+                        else:
+                            self.params.pop(key, None)
+                        self.update_display()
+                    except ValueError:
+                        self.params.pop(key, None)
+
+                val_entry.bind("<Return>", on_entry_return)
+                if value is not None:
+                    val = max(min(value, to_), from_)
+                    val_var.set(format_number(val))
+                    self.params[key] = val
+            else:
+                slider_row = tk.Frame(block_frame, bg="white")
+                slider_row.pack(fill="x", padx=10, pady=(2, 10))
+
+                val_entry = tk.Entry(
+                    slider_row,
+                    textvariable=val_var,
+                    width=6,
+                    justify="center",
+                    relief="groove",
+                    font=("Arial", 10),
+                )
+                val_entry.pack(side="left", padx=(0, 10))
+
+                if 'price' in key.lower():
+                    from_, to_, resolution = 0, 1000, 1
+                elif 'beta' in key.lower():
+                    from_, to_, resolution = -2, 5, 0.1
+                elif 'volume' in key.lower():
+                    from_, to_, resolution = 0, 1_000_000, 10_000
+                elif 'dividend' in key.lower():
+                    from_, to_, resolution = 0, 20, 0.1
+                elif 'limit' in key.lower():
+                    from_, to_, resolution = 0, 100, 1
+                else:
+                    from_, to_, resolution = 0, 200, 1
+
                 slider = tk.Scale(
                     slider_row,
                     from_=from_,
@@ -512,24 +551,6 @@ class StockScreenerApp:
                     val_var.set(f"{float(value):,.2f}")
                     self.params[key] = value
                     update_value_display(value)
-            else:
-                def on_entry_return(event):
-                    try:
-                        val = float(val_var.get().replace(',', ''))
-                        val = round(val / 1_000_000) * 1_000_000
-                        val_var.set(format_number(val))
-                        if from_ <= val <= to_:
-                            self.params[key] = val
-                        else:
-                            self.params.pop(key, None)
-                        self.update_display()
-                    except ValueError:
-                        self.params.pop(key, None)
-                val_entry.bind("<Return>", on_entry_return)
-                if value is not None:
-                    val = max(min(value, to_), from_)
-                    val_var.set(format_number(val))
-                    self.params[key] = val
 
 
         # Add to snap zone
