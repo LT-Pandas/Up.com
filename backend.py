@@ -190,3 +190,6 @@ class StockDataService:
         except Exception:
             pass
         return None
+        except Exception:
+            pass
+        return None
