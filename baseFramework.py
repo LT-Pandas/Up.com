@@ -342,8 +342,29 @@ class StockScreenerApp:
                 val_entry.insert(0, "")
                 val_entry.pack(side="left", padx=(0, 10))
 
-                slider = tk.Scale(slider_row, from_=0, to=1000, orient="horizontal", resolution=1, length=200, state="disabled")
-                slider.set(0)
+                if 'price' in base_key.lower():
+                    from_, to_, resolution = 0, 1000, 1
+                elif 'beta' in base_key.lower():
+                    from_, to_, resolution = -2, 5, 0.1
+                elif 'volume' in base_key.lower():
+                    from_, to_, resolution = 0, 1_000_000, 10_000
+                elif 'dividend' in base_key.lower():
+                    from_, to_, resolution = 0, 20, 0.1
+                elif 'limit' in base_key.lower():
+                    from_, to_, resolution = 0, 100, 1
+                else:
+                    from_, to_, resolution = 0, 200, 1
+
+                slider = tk.Scale(
+                    slider_row,
+                    from_=from_,
+                    to=to_,
+                    orient="horizontal",
+                    resolution=resolution,
+                    length=200,
+                    state="disabled",
+                )
+                slider.set(from_)
                 slider.pack(side="left", fill="x", expand=True)
 
         elif base_key == "stockSearch":
@@ -655,9 +676,12 @@ class StockScreenerApp:
 
     # Remove usage of simpledialog in set_parameter()
     def set_parameter(self, key: str, value_type: type):
-        default_value = 100.0 if value_type == float else 100
+        if 'dividend' in key.lower():
+            default_value = 0.0
+        else:
+            default_value = 100.0 if value_type == float else 100
         self.params[key] = default_value
-        self.add_filter_block(key)
+        self.add_filter_block(key, default_value)
         self.update_display()
         self.delayed_search()
 
