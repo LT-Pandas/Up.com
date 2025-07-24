@@ -18,6 +18,7 @@ class StockDataService:
         self.base_url = base_url
         self.quote_url = quote_url
         self._income_cache: dict[str, list] = {}
+        self._dividend_cache: dict[str, float] = {}
 
     def _build_query(self, params: dict, exclude: set[str] | None = None,
                      default_limit: int | None = 20) -> str:
@@ -28,11 +29,6 @@ class StockDataService:
             if key in exclude or val in ["", None]:
                 continue
             base_key = key.split("_")[0]
-            if base_key in {"dividendMoreThan", "dividendLowerThan"}:
-                try:
-                    val = float(val) * 4
-                except Exception:
-                    pass
             part_val = str(val).lower() if isinstance(val, bool) else val
             parts.append(f"{base_key}={part_val}")
         query = "&".join(parts)
@@ -117,7 +113,6 @@ class StockDataService:
                     except Exception:
                         continue
             data = matching_stocks
-
         return data
 
     def get_quotes(self, symbols: list[str]) -> list:
@@ -156,8 +151,11 @@ class StockDataService:
         except Exception:
             return {}
 
+
     def get_quarterly_dividend(self, symbol: str) -> float | None:
         """Return the most recent quarterly dividend for the given symbol."""
+        if symbol in self._dividend_cache:
+            return self._dividend_cache[symbol]
         try:
             url = (
                 "https://financialmodelingprep.com/api/v3/historical-price-full/stock_dividend/"
@@ -171,7 +169,9 @@ class StockDataService:
                 item = data[0]
                 val = item.get("dividend") or item.get("adjDividend")
                 if val not in [None, "", "N/A"]:
-                    return float(val)
+                    val = float(val)
+                    self._dividend_cache[symbol] = val
+                    return val
         except Exception:
             pass
         return None
