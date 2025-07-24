@@ -144,3 +144,23 @@ class StockDataService:
             return data
         except Exception:
             return {}
+
+    def get_quarterly_dividend(self, symbol: str) -> float | None:
+        """Return the most recent quarterly dividend for the given symbol."""
+        try:
+            url = (
+                "https://financialmodelingprep.com/api/v3/historical-price-full/stock_dividend/"
+                f"{symbol}?apikey={self.api_key}&limit=1"
+            )
+            response = requests.get(url)
+            data = response.json()
+            if isinstance(data, dict):
+                data = data.get("historical", [])
+            if isinstance(data, list) and data:
+                item = data[0]
+                val = item.get("dividend") or item.get("adjDividend")
+                if val not in [None, "", "N/A"]:
+                    return float(val)
+        except Exception:
+            pass
+        return None

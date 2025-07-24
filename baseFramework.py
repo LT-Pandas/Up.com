@@ -736,6 +736,7 @@ class StockScreenerApp:
                     symbol=symbol,
                     quote_data=quote_data,
                     profile_data=profile,
+                    backend=self.backend,
                 )
                 dropdown.pack(fill="x", padx=10, pady=(5, 10))
                 dropdown_frame[0] = dropdown
@@ -771,11 +772,12 @@ class StockScreenerApp:
             self.results_canvas.yview_moveto(0)  # Scroll to top
 
 class ResultDropdown(tk.Frame):
-    def __init__(self, parent, symbol, quote_data, profile_data=None):
+    def __init__(self, parent, symbol, quote_data, profile_data=None, backend=None):
         super().__init__(parent, bg="#f5f5f5", height=100)
         self.symbol = symbol
         self.quote_data = quote_data or {}
         self.profile_data = profile_data or {}
+        self.backend = backend
 
         self.build_dropdown_content()
 
@@ -783,6 +785,8 @@ class ResultDropdown(tk.Frame):
         price = self.quote_data.get("price") or self.profile_data.get("price")
 
         raw_div_price = self.profile_data.get("lastDiv")
+        if not raw_div_price and self.backend:
+            raw_div_price = self.backend.get_quarterly_dividend(self.symbol)
         div_price = (
             f"${float(raw_div_price):.2f}"
             if isinstance(raw_div_price, (int, float, str)) and str(raw_div_price) not in ["", "None", "N/A"]
@@ -803,7 +807,7 @@ class ResultDropdown(tk.Frame):
             ("P/E Ratio", self.quote_data.get("pe", "N/A")),
             ("Volume", format_number(self.quote_data.get("volume") or 0)),
             ("Dividend Yield", div_yield),
-            ("Dividend Price", div_price),
+            ("Quarterly Dividend", div_price),
             ("Beta", self.profile_data.get("beta", "N/A")),
         ]
 
