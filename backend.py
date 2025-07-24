@@ -30,11 +30,20 @@ class StockDataService:
                 f"query={symbol_fragment}&limit=10&exchange=NASDAQ&apikey={self.api_key}"
             )
         else:
-            url = self.base_url + "&".join(
-                f"{key}={str(val).lower() if isinstance(val, bool) else val}"
-                for key, val in params.items()
-                if val not in ["", None]
-            )
+            parts = []
+            for key, val in params.items():
+                if val in ["", None]:
+                    continue
+                base_key = key.split("_")[0]
+                if base_key in {"dividendMoreThan", "dividendLowerThan"}:
+                    try:
+                        val = float(val) * 4
+                    except Exception:
+                        pass
+                parts.append(
+                    f"{base_key}={str(val).lower() if isinstance(val, bool) else val}"
+                )
+            url = self.base_url + "&".join(parts)
             url += f"&apikey={self.api_key}"
             if "limit" not in params:
                 url += "&limit=20"
