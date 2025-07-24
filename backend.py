@@ -121,6 +121,10 @@ class StockDataService:
                 if symbol in self._dividend_cache:
                     return symbol, self._dividend_cache[symbol]
                 val = self.get_next_quarter_dividend(symbol)
+
+                if val is None:
+                    val = self.get_quarterly_dividend(symbol)
+
                 if val is not None:
                     self._dividend_cache[symbol] = val
                 return symbol, val
@@ -209,7 +213,7 @@ class StockDataService:
         """Return the upcoming quarterly dividend for the given symbol."""
         try:
             url = (
-                "https://financialmodelingprep.com/api/v3/dividend-calendar?"
+                "https://financialmodelingprep.com/api/v3/stock_dividend_calendar?"
                 f"symbol={symbol}&apikey={self.api_key}&limit=1"
             )
             response = requests.get(url)
