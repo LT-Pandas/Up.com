@@ -164,3 +164,20 @@ class StockDataService:
         except Exception:
             pass
         return None
+
+    def get_next_quarter_dividend(self, symbol: str) -> float | None:
+        """Return the upcoming quarterly dividend for the given symbol."""
+        try:
+            url = (
+                "https://financialmodelingprep.com/api/v3/dividend-calendar?"
+                f"symbol={symbol}&apikey={self.api_key}&limit=1"
+            )
+            response = requests.get(url)
+            data = response.json()
+            if isinstance(data, list) and data:
+                val = data[0].get("dividend")
+                if val not in [None, "", "N/A"]:
+                    return float(val)
+        except Exception:
+            pass
+        return None
