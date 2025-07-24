@@ -808,9 +808,13 @@ class ResultDropdown(tk.Frame):
     def build_dropdown_content(self):
         price = self.quote_data.get("price") or self.profile_data.get("price")
 
-        raw_div_price = self.profile_data.get("lastDiv")
-        if not raw_div_price and self.backend:
-            raw_div_price = self.backend.get_quarterly_dividend(self.symbol)
+        raw_div_price = None
+        if self.backend:
+            raw_div_price = self.backend.get_next_quarter_dividend(self.symbol)
+            if raw_div_price in [None, "", "N/A"]:
+                raw_div_price = self.backend.get_quarterly_dividend(self.symbol)
+        if not raw_div_price:
+            raw_div_price = self.profile_data.get("lastDiv")
         div_price = (
             f"${float(raw_div_price):.2f}"
             if isinstance(raw_div_price, (int, float, str)) and str(raw_div_price) not in ["", "None", "N/A"]
@@ -831,7 +835,7 @@ class ResultDropdown(tk.Frame):
             ("P/E Ratio", self.quote_data.get("pe", "N/A")),
             ("Volume", format_number(self.quote_data.get("volume") or 0)),
             ("Dividend Yield", div_yield),
-            ("Quarterly Dividend", div_price),
+            ("Next Dividend", div_price),
             ("Beta", self.profile_data.get("beta", "N/A")),
         ]
 
