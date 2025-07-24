@@ -759,12 +759,34 @@ class ResultDropdown(tk.Frame):
         self.build_dropdown_content()
 
     def build_dropdown_content(self):
+        market_cap = self.quote_data.get("marketCap") or self.profile_data.get("mktCap") or 0
+        volume = self.quote_data.get("volume") or 0
+        pe_ratio = self.quote_data.get("pe", "N/A")
+        dividend_price = self.profile_data.get("lastDiv")
+        beta = self.profile_data.get("beta", "N/A")
+        price = self.quote_data.get("price") or self.profile_data.get("price")
+
+        try:
+            div_price_formatted = f"${float(dividend_price):.2f}"
+        except Exception:
+            div_price_formatted = "N/A"
+
+        try:
+            if dividend_price is not None and price:
+                div_yield = float(dividend_price) / float(price) * 100
+                div_yield_formatted = f"{div_yield:.2f}%"
+            else:
+                div_yield_formatted = "N/A"
+        except Exception:
+            div_yield_formatted = "N/A"
+
         metrics = [
-            ("Market Cap", format_number(self.quote_data.get("marketCap") or self.profile_data.get("mktCap") or 0)),
-            ("P/E Ratio", self.quote_data.get("pe", "N/A")),
-            ("Volume", format_number(self.quote_data.get("volume") or 0)),
-            ("Dividend/share", self.profile_data.get("lastDiv", "N/A")),
-            ("Beta", self.profile_data.get("beta", "N/A")),
+            ("Market Cap", f"${format_number(market_cap)}"),
+            ("P/E Ratio", pe_ratio),
+            ("Volume", format_number(volume)),
+            ("Dividend Yield", div_yield_formatted),
+            ("Dividend Price", div_price_formatted),
+            ("Beta", beta),
         ]
 
         for label_text, value in metrics:
