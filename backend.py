@@ -121,8 +121,10 @@ class StockDataService:
                 if symbol in self._dividend_cache:
                     return symbol, self._dividend_cache[symbol]
                 val = self.get_next_quarter_dividend(symbol)
+
                 if val is None:
                     val = self.get_quarterly_dividend(symbol)
+
                 if val is not None:
                     self._dividend_cache[symbol] = val
                 return symbol, val
