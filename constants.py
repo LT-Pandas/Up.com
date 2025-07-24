@@ -11,8 +11,8 @@ LABEL_TO_KEY = {
     "Upper Volume": "volumeLowerThan",
     "Lower Beta": "betaMoreThan",
     "Upper Beta": "betaLowerThan",
-    "Lower Dividend Price": "dividendMoreThan",
-    "Upper Dividend Price": "dividendLowerThan",
+    "Min Annual Dividend ($)": "dividendMoreThan",  #later change to quarterly dividend price
+#    "Upper Dividend Yield": "dividendLowerThan", #consolodated dividends to 1 button
     # Dropdowns + Boolean filters
     "Sector": "sector",
     "Industry": "industry",
