@@ -9,12 +9,6 @@ from constants import (
     get_label_from_param_key as util_get_label_from_param_key,
 )
 from backend import StockDataService
-try:
-    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-    from matplotlib.figure import Figure
-    import matplotlib.dates as mdates
-except Exception:  # pragma: no cover - optional dependency for tests
-    FigureCanvasTkAgg = Figure = mdates = None
 from datetime import datetime
 
 def format_number(value: float) -> str:
@@ -711,6 +705,9 @@ class StockScreenerApp:
     def get_historical_prices(self, symbol):
         return self.backend.get_historical_prices(symbol)
 
+    def get_profile(self, symbol):
+        return self.backend.get_profile(symbol)
+
     def render_stock_tile(self, symbol, quote_data, parent=None):
         if parent is None:
             parent = self.results_frame
@@ -733,8 +730,13 @@ class StockScreenerApp:
 
         def toggle_dropdown(btn):
             if dropdown_frame[0] is None:
-                history = self.get_historical_prices(symbol)
-                dropdown = ResultDropdown(frame, symbol=symbol, quote_data=quote_data, price_history=history)
+                profile = self.get_profile(symbol)
+                dropdown = ResultDropdown(
+                    frame,
+                    symbol=symbol,
+                    quote_data=quote_data,
+                    profile_data=profile,
+                )
                 dropdown.pack(fill="x", padx=10, pady=(5, 10))
                 dropdown_frame[0] = dropdown
                 btn.config(text="▲")
@@ -769,53 +771,28 @@ class StockScreenerApp:
             self.results_canvas.yview_moveto(0)  # Scroll to top
 
 class ResultDropdown(tk.Frame):
-    def __init__(self, parent, symbol, quote_data, price_history=None, profile_data=None):
+    def __init__(self, parent, symbol, quote_data, profile_data=None):
         super().__init__(parent, bg="#f5f5f5", height=100)
         self.symbol = symbol
-        self.quote_data = quote_data
-        self.price_history = price_history or []
+        self.quote_data = quote_data or {}
         self.profile_data = profile_data or {}
 
         self.build_dropdown_content()
 
     def build_dropdown_content(self):
-        if not self.price_history:
-            tk.Label(self, text="No price history available.", bg="#f5f5f5", fg="gray").pack(pady=10)
-            return
+        metrics = [
+            ("Market Cap", format_number(self.quote_data.get("marketCap") or self.profile_data.get("mktCap") or 0)),
+            ("P/E Ratio", self.quote_data.get("pe", "N/A")),
+            ("Volume", format_number(self.quote_data.get("volume") or 0)),
+            ("Dividend/share", self.profile_data.get("lastDiv", "N/A")),
+            ("Beta", self.profile_data.get("beta", "N/A")),
+        ]
 
-        try:
-            import matplotlib.pyplot as plt
-
-            times, prices = zip(*self.price_history)
-
-            fig = Figure(figsize=(5.0, 3.0), dpi=100)
-            ax = fig.add_subplot(111)
-            ax.plot(times, prices, color='blue', linewidth=1.5, marker='o', markersize=2)
-
-            # Remove surrounding box lines
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.spines['left'].set_linewidth(1)
-            ax.spines['bottom'].set_linewidth(1)
-
-            # Set hourly x-axis ticks starting at 9:30
-            ax.xaxis.set_major_locator(mdates.MinuteLocator(byminute=[30], interval=1))
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%I:%M %p'))  # 12-hour format
-            ax.tick_params(axis='x', labelrotation=45, labelsize=6)
-            ax.tick_params(axis='y', labelsize=6)
-            ax.set_title(f"{self.symbol} Trend (Intraday)", fontsize=8)
-
-            fig.tight_layout()
-
-            canvas = FigureCanvasTkAgg(fig, master=self)
-            canvas.draw()
-            canvas.get_tk_widget().pack(side="left", padx=5, pady=5)
-
-        except Exception as e:
-            import traceback
-            print("[ERROR] Failed to draw chart:")
-            traceback.print_exc()  # This will print the real reason why it failed
-            tk.Label(self, text=f"Error rendering graph:\n{e}", fg="red").pack()
+        for label_text, value in metrics:
+            row = tk.Frame(self, bg="#f5f5f5")
+            row.pack(fill="x", padx=10, pady=2)
+            tk.Label(row, text=f"{label_text}:", width=15, anchor="w", bg="#f5f5f5").pack(side="left")
+            tk.Label(row, text=str(value), anchor="w", bg="#f5f5f5").pack(side="left")
 
 if __name__ == "__main__":
     root = tk.Tk()
