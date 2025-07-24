@@ -151,7 +151,6 @@ class StockDataService:
         except Exception:
             return {}
 
-
     def get_quarterly_dividend(self, symbol: str) -> float | None:
         """Return the most recent quarterly dividend for the given symbol."""
         if symbol in self._dividend_cache:
