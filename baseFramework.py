@@ -496,7 +496,7 @@ class StockScreenerApp:
                 val_entry.pack(side="left", padx=(0, 10))
 
                 if 'price' in key.lower():
-                    from_, to_, resolution = 0, 1000, 1
+                    from_, to_, resolution = 0, 10_000, 1
                 elif 'beta' in key.lower():
                     from_, to_, resolution = -2, 5, 0.1
                 elif 'volume' in key.lower():
