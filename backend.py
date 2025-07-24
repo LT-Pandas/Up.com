@@ -123,13 +123,19 @@ class StockDataService:
         div_key = next((k for k in params if k.split("_")[0] == "dividendMoreThan"), None)
         if div_key:
             try:
-                thresh = float(params[div_key]) * 4
+                q_thresh = float(params[div_key])
             except Exception:
-                thresh = None
+                q_thresh = None
         else:
-            thresh = None
-        if thresh is not None:
-            data = [item for item in data if self._get_last_annual_dividend(item) >= thresh]
+            q_thresh = None
+
+        if q_thresh is not None:
+            filtered = []
+            for item in data:
+                annual_div = self._get_last_annual_dividend(item)
+                if annual_div / 4 >= q_thresh:
+                    filtered.append(item)
+            data = filtered
 
         return data
 
