@@ -780,11 +780,30 @@ class ResultDropdown(tk.Frame):
         self.build_dropdown_content()
 
     def build_dropdown_content(self):
+        price = self.quote_data.get("price") or self.profile_data.get("price")
+
+        raw_div_price = self.profile_data.get("lastDiv")
+        div_price = (
+            f"${float(raw_div_price):.2f}"
+            if isinstance(raw_div_price, (int, float, str)) and str(raw_div_price) not in ["", "None", "N/A"]
+            else "N/A"
+        )
+
+        if raw_div_price and price:
+            try:
+                dividend_yield_value = (float(raw_div_price) / float(price)) * 100
+                div_yield = f"{dividend_yield_value:.2f}%"
+            except Exception:
+                div_yield = "N/A"
+        else:
+            div_yield = "N/A"
+
         metrics = [
             ("Market Cap", format_number(self.quote_data.get("marketCap") or self.profile_data.get("mktCap") or 0)),
             ("P/E Ratio", self.quote_data.get("pe", "N/A")),
             ("Volume", format_number(self.quote_data.get("volume") or 0)),
-            ("Dividend/share", self.profile_data.get("lastDiv", "N/A")),
+            ("Dividend Yield", div_yield),
+            ("Dividend Price", div_price),
             ("Beta", self.profile_data.get("beta", "N/A")),
         ]
 
