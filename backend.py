@@ -21,6 +21,20 @@ class StockDataService:
 
     def search(self, params: dict) -> list:
         """Return a list of search results based on provided parameters."""
+        params = dict(params)
+        div_more = params.get("dividendMoreThan")
+        div_less = params.get("dividendLowerThan")
+        try:
+            if div_more is not None:
+                params["dividendMoreThan"] = float(div_more) * 4
+        except Exception:
+            params.pop("dividendMoreThan", None)
+        try:
+            if div_less is not None:
+                params["dividendLowerThan"] = float(div_less) * 4
+        except Exception:
+            params.pop("dividendLowerThan", None)
+
         if "stockSearch" in params:
             symbol_fragment = params["stockSearch"]
             if len(symbol_fragment) < 1:
@@ -169,7 +183,7 @@ class StockDataService:
         """Return the upcoming quarterly dividend for the given symbol."""
         try:
             url = (
-                "https://financialmodelingprep.com/api/v3/dividend-calendar?"
+                "https://financialmodelingprep.com/api/v3/stock_dividend_calendar?"
                 f"symbol={symbol}&apikey={self.api_key}&limit=1"
             )
             response = requests.get(url)
