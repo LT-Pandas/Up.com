@@ -11,8 +11,8 @@ LABEL_TO_KEY = {
     "Upper Volume": "volumeLowerThan",
     "Lower Beta": "betaMoreThan",
     "Upper Beta": "betaLowerThan",
-    "Lower Dividend": "dividendMoreThan",
-    "Upper Dividend": "dividendLowerThan",
+    "Lower Dividend Yield": "dividendMoreThan",
+    "Upper Dividend Yield": "dividendLowerThan",
     # Dropdowns + Boolean filters
     "Sector": "sector",
     "Industry": "industry",
