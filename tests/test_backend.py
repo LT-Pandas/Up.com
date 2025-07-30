@@ -24,3 +24,4 @@ def test_dividend_params_pass_through(monkeypatch):
     svc.search({'dividendMoreThan': 1.5, 'dividendLowerThan': 2})
     assert 'dividendMoreThan=1.5' in req.last_url
     assert 'dividendLowerThan=2' in req.last_url
+    assert 'isActivelyTrading=true' in req.last_url
