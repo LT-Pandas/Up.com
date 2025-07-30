@@ -38,6 +38,9 @@ class StockDataService:
 
     def search(self, params: dict) -> list:
         """Return a list of search results based on provided parameters."""
+        params = dict(params)
+        params.setdefault("isActivelyTrading", True)
+
         if "stockSearch" in params:
             symbol_fragment = params["stockSearch"]
             if not symbol_fragment:
@@ -45,6 +48,7 @@ class StockDataService:
             url = (
                 "https://financialmodelingprep.com/api/v3/search?"
                 f"query={symbol_fragment}&limit=10&exchange=NASDAQ&apikey={self.api_key}"
+                f"&isActivelyTrading=true"
             )
         else:
             query = self._build_query(params)
