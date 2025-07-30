@@ -837,6 +837,13 @@ class ResultDropdown(tk.Frame):
             ("Dividend Yield", div_yield),
             ("Next Dividend", div_price),
             ("Beta", self.profile_data.get("beta", "N/A")),
+            ("Listed Sector", self.profile_data.get("sector", "N/A")),
+            ("Listed Industry", self.profile_data.get("industry", "N/A")),
+            (
+                "Listed Exchange",
+                self.profile_data.get("exchangeShortName")
+                or self.profile_data.get("exchange", "N/A"),
+            ),
         ]
 
         for label_text, value in metrics:
