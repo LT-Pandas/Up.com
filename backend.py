@@ -19,6 +19,7 @@ class StockDataService:
         self.quote_url = quote_url
         self._income_cache: dict[str, list] = {}
         self._dividend_cache: dict[str, float] = {}
+        self._dividend_overview_cache: dict[str, dict] = {}
 
     def _build_query(self, params: dict, exclude: set[str] | None = None,
                      default_limit: int | None = 20) -> str:
@@ -195,3 +196,51 @@ class StockDataService:
         except Exception:
             pass
         return None
+
+    def get_dividend_overview(self, symbol: str) -> dict:
+        """Return dividend amount, yield and frequency using the stable endpoint."""
+        if symbol in self._dividend_overview_cache:
+            return self._dividend_overview_cache[symbol]
+        try:
+            url = (
+                "https://financialmodelingprep.com/stable/dividends?"
+                f"symbol={symbol}&apikey={self.api_key}"
+            )
+            response = requests.get(url)
+            data = response.json()
+            if not isinstance(data, list) or not data:
+                return {}
+            first = data[0]
+            amount = first.get("adjDividend") or first.get("dividend")
+            if amount not in [None, "", "N/A"]:
+                amount = float(amount)
+            else:
+                amount = None
+            div_yield = first.get("dividendYield")
+            if div_yield not in [None, "", "N/A"]:
+                div_yield = float(div_yield) * 100
+            else:
+                div_yield = None
+            freq = first.get("paymentFrequency") or first.get("frequency")
+            if not freq:
+                dates = [d.get("date") for d in data[:4] if d.get("date")]
+                freq = self._infer_frequency(dates)
+            result = {"dividend": amount, "yield": div_yield, "frequency": freq}
+            self._dividend_overview_cache[symbol] = result
+            return result
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _infer_frequency(dates: list[str]) -> str | None:
+        """Infer payment frequency from a list of dividend dates."""
+        try:
+            parsed = [datetime.strptime(d, "%Y-%m-%d") for d in dates]
+            parsed.sort(reverse=True)
+            if len(parsed) >= 4 and (parsed[0] - parsed[3]).days <= 380:
+                return "quarterly"
+            if len(parsed) >= 2 and (parsed[0] - parsed[1]).days <= 200:
+                return "semi-annually"
+            return None
+        except Exception:
+            return None

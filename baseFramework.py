@@ -808,34 +808,44 @@ class ResultDropdown(tk.Frame):
     def build_dropdown_content(self):
         price = self.quote_data.get("price") or self.profile_data.get("price")
 
-        raw_div_price = None
+        div_info = {}
         if self.backend:
-            raw_div_price = self.backend.get_next_quarter_dividend(self.symbol)
-            if raw_div_price in [None, "", "N/A"]:
-                raw_div_price = self.backend.get_quarterly_dividend(self.symbol)
-        if not raw_div_price:
-            raw_div_price = self.profile_data.get("lastDiv")
+            div_info = self.backend.get_dividend_overview(self.symbol) or {}
+
+        raw_div_price = div_info.get("dividend")
         div_price = (
             f"${float(raw_div_price):.2f}"
-            if isinstance(raw_div_price, (int, float, str)) and str(raw_div_price) not in ["", "None", "N/A"]
+            if isinstance(raw_div_price, (int, float))
             else "N/A"
         )
 
-        if raw_div_price and price:
+        div_yield_value = div_info.get("yield")
+        if div_yield_value is None and raw_div_price and price:
             try:
-                dividend_yield_value = (float(raw_div_price) / float(price)) * 100
-                div_yield = f"{dividend_yield_value:.2f}%"
+                div_yield_value = (float(raw_div_price) / float(price)) * 100
             except Exception:
-                div_yield = "N/A"
+                div_yield_value = None
+        if div_yield_value is not None:
+            div_yield = f"{float(div_yield_value):.2f}%"
         else:
             div_yield = "N/A"
 
+        div_frequency = div_info.get("frequency") or "N/A"
+
         metrics = [
-            ("Market Cap", format_number(self.quote_data.get("marketCap") or self.profile_data.get("mktCap") or 0)),
+            (
+                "Market Cap",
+                format_number(
+                    self.quote_data.get("marketCap")
+                    or self.profile_data.get("mktCap")
+                    or 0
+                ),
+            ),
             ("P/E Ratio", self.quote_data.get("pe", "N/A")),
             ("Volume", format_number(self.quote_data.get("volume") or 0)),
             ("Dividend Yield", div_yield),
-            ("Next Dividend", div_price),
+            ("Dividend Amount", div_price),
+            ("Dividend Frequency", div_frequency),
             ("Beta", self.profile_data.get("beta", "N/A")),
             ("Listed Sector", self.profile_data.get("sector", "N/A")),
             ("Listed Industry", self.profile_data.get("industry", "N/A")),
