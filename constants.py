@@ -120,7 +120,7 @@ FILTER_OPTIONS = {
     "isFund": ["true", "false"],
     "isActivelyTrading": ["true", "false"],
     "includeAllShareClasses": ["true", "false"],
-    "marketStage": ["Rule of 40: Growth + Margin >= 40%"],
+    "marketStage": ["Product Market Fit (Rule of 40)"],
     "yoyGrowth": ["Annual", "Quarterly"],
     "profitMargin": ["Annual", "Quarterly"],
     "rdRatio": ["Annual", "Quarterly"],

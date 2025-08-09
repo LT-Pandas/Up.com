@@ -126,7 +126,7 @@ class DraggableBlock(tk.Frame):
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
             combo = ttk.Combobox(dropdown_row, font=("Arial", 10), state="disabled")
             if base_key == "marketStage":
-                combo.set("Rule of 40: Growth + Margin >= 40%")
+                combo.set("Product Market Fit (Rule of 40)")
             else:
                 combo.set("")  # Leave blank for all other dropdowns
 
