@@ -141,7 +141,15 @@ class DraggableBlock(tk.Frame):
         label_text = self.preview_block._param_label
         base_key = self.app.get_param_key_from_label(label_text)
 
-        clone = tk.Frame(self._drag_window, bg="white", relief='solid', bd=1, width=300, height=80)
+        clone = tk.Frame(
+            self._drag_window,
+            bg="white",
+            relief='solid',
+            bd=1,
+            width=300,
+            height=80,
+            highlightthickness=0,
+        )
         clone.pack_propagate(False)
 
         title_row = tk.Frame(clone, bg="white")
@@ -358,7 +366,15 @@ class StockScreenerApp:
     def create_filter_preview_block(self, label, parent):
         base_key = self.get_param_key_from_label(label)
 
-        frame = tk.Frame(parent, bg="white", relief='solid', bd=1, width=300, height=80)  # Container for filter preview blocks
+        frame = tk.Frame(
+            parent,
+            bg="white",
+            relief='solid',
+            bd=1,
+            width=300,
+            height=80,
+            highlightthickness=0,
+        )  # Container for filter preview blocks
         frame.pack_propagate(False)
 
         title_row = tk.Frame(frame, bg="white")
@@ -429,7 +445,15 @@ class StockScreenerApp:
         key = f"{base_key}_{count+1}" if count else base_key
 
 
-        block_frame = tk.Frame(self.snap_zone, bg="white", relief='solid', bd=1, width=300, height=80)
+        block_frame = tk.Frame(
+            self.snap_zone,
+            bg="white",
+            relief='solid',
+            bd=1,
+            width=300,
+            height=80,
+            highlightthickness=0,
+        )
         block_frame.pack_propagate(False)
         block_frame._param_key = key
 
