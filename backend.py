@@ -6,6 +6,7 @@ except Exception:  # pragma: no cover - optional dependency for tests
             raise ModuleNotFoundError("requests is required to fetch remote data")
 
     requests = _RequestsStub()
+import concurrent.futures
 from datetime import datetime
 
 
@@ -16,9 +17,9 @@ class StockDataService:
         self.api_key = api_key
         self.base_url = base_url
         self.quote_url = quote_url
-        self.dividend_url = "https://financialmodelingprep.com/stable/dividends"
-        self._dividend_history_cache: dict[str, list] = {}
-
+        self._income_cache: dict[str, list] = {}
+        self._dividend_cache: dict[str, float] = {}
+        self._dividend_overview_cache: dict[str, dict] = {}
 
     def _build_query(self, params: dict, exclude: set[str] | None = None,
                      default_limit: int | None = 20) -> str:
@@ -55,7 +56,69 @@ class StockDataService:
             url = f"{self.base_url}{query}&apikey={self.api_key}"
 
         response = requests.get(url)
-        return response.json()
+        data = response.json()
+
+        if any("marketStage" in k for k in params):
+            query = self._build_query(params, exclude={"marketStage"}, default_limit=100)
+            base_screen_url = f"{self.base_url}{query}&apikey={self.api_key}"
+            response = requests.get(base_screen_url)
+            screener_data = response.json()
+
+            matching_stocks = []
+
+            def fetch_income(symbol: str):
+                if symbol in self._income_cache:
+                    return symbol, self._income_cache[symbol]
+                try:
+                    url = (
+                        "https://financialmodelingprep.com/api/v3/income-statement/"
+                        f"{symbol}?period=quarter&limit=6&apikey={self.api_key}"
+                    )
+                    data = requests.get(url, timeout=3).json()
+                    self._income_cache[symbol] = data
+                    return symbol, data
+                except Exception:
+                    return symbol, []
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+                futures = [executor.submit(fetch_income, s["symbol"]) for s in screener_data]
+                income_results = {}
+                for future in concurrent.futures.as_completed(futures):
+                    symbol, inc_data = future.result()
+                    if inc_data:
+                        income_results[symbol] = inc_data
+
+                for stock in screener_data:
+                    symbol = stock["symbol"]
+                    income_data = income_results.get(symbol, [])
+                    if len(income_data) < 5:
+                        continue
+                    try:
+                        q0, q1, q2, q3, q4 = income_data[:5]
+                        rev0 = float(q0.get("revenue") or 0)
+                        rev1 = float(q1.get("revenue") or 0)
+                        rev2 = float(q2.get("revenue") or 0)
+                        rev3 = float(q3.get("revenue") or 0)
+                        rev4 = float(q4.get("revenue") or 0)
+                        net0 = float(q0.get("netIncome") or 0)
+                        net1 = float(q1.get("netIncome") or 0)
+                        if any(v == 0 for v in [rev0, rev1, rev2, rev3, rev4]):
+                            continue
+                        growth0 = (rev0 - rev1) / rev1 * 100
+                        growth1 = (rev1 - rev2) / rev2 * 100
+                        margin0 = (net0 / rev0) * 100
+                        margin1 = (net1 / rev1) * 100
+                        rule40_avg = ((growth0 + margin0) + (growth1 + margin1)) / 2
+                        flat_prev1 = (rev2 - rev3) / rev3 * 100
+                        flat_prev2 = (rev3 - rev4) / rev4 * 100
+                        if rule40_avg >= 40 and abs(flat_prev1) <= 5 and abs(flat_prev2) <= 5:
+                            matching_stocks.append(stock)
+                            if len(matching_stocks) >= 20:
+                                break
+                    except Exception:
+                        continue
+            data = matching_stocks
+        return data
 
     def get_quotes(self, symbols: list[str]) -> list:
         if not symbols:
@@ -93,28 +156,91 @@ class StockDataService:
         except Exception:
             return {}
 
-    def get_dividend_history(self, symbol: str) -> list[tuple[str, float]]:
-        """Return historical dividend data as a list of (date, amount) tuples."""
-        if symbol in self._dividend_history_cache:
-            return self._dividend_history_cache[symbol]
-
+    def get_quarterly_dividend(self, symbol: str) -> float | None:
+        """Return the most recent quarterly dividend for the given symbol."""
+        if symbol in self._dividend_cache:
+            return self._dividend_cache[symbol]
         try:
-            url = f"{self.dividend_url}?symbol={symbol}&apikey={self.api_key}"
-            resp = requests.get(url)
-            data = resp.json()
-            history = []
+            url = (
+                "https://financialmodelingprep.com/api/v3/historical-price-full/stock_dividend/"
+                f"{symbol}?apikey={self.api_key}&limit=1"
+            )
+            response = requests.get(url)
+            data = response.json()
             if isinstance(data, dict):
                 data = data.get("historical", [])
-            for item in data:
-                date = item.get("date") or item.get("paymentDate") or item.get("label")
+            if isinstance(data, list) and data:
+                item = data[0]
                 val = item.get("dividend") or item.get("adjDividend")
-                if date and val not in [None, "", "N/A"]:
-                    try:
-                        val = float(val)
-                    except Exception:
-                        continue
-                    history.append((date, val))
-            self._dividend_history_cache[symbol] = history
-            return history
+                if val not in [None, "", "N/A"]:
+                    val = float(val)
+                    self._dividend_cache[symbol] = val
+                    return val
         except Exception:
-            return []
+            pass
+        return None
+
+    def get_next_quarter_dividend(self, symbol: str) -> float | None:
+        """Return the upcoming quarterly dividend for the given symbol."""
+        try:
+            url = (
+                "https://financialmodelingprep.com/api/v3/dividend-calendar?"
+                f"symbol={symbol}&apikey={self.api_key}&limit=1"
+            )
+            response = requests.get(url)
+            data = response.json()
+            if isinstance(data, list) and data:
+                val = data[0].get("dividend")
+                if val not in [None, "", "N/A"]:
+                    return float(val)
+        except Exception:
+            pass
+        return None
+
+    def get_dividend_overview(self, symbol: str) -> dict:
+        """Return dividend amount, yield and frequency using the stable endpoint."""
+        if symbol in self._dividend_overview_cache:
+            return self._dividend_overview_cache[symbol]
+        try:
+            url = (
+                "https://financialmodelingprep.com/stable/dividends?"
+                f"symbol={symbol}&apikey={self.api_key}"
+            )
+            response = requests.get(url)
+            data = response.json()
+            if not isinstance(data, list) or not data:
+                return {}
+            first = data[0]
+            amount = first.get("adjDividend") or first.get("dividend")
+            if amount not in [None, "", "N/A"]:
+                amount = float(amount)
+            else:
+                amount = None
+            div_yield = first.get("dividendYield")
+            if div_yield not in [None, "", "N/A"]:
+                div_yield = float(div_yield) * 100
+            else:
+                div_yield = None
+            freq = first.get("paymentFrequency") or first.get("frequency")
+            if not freq:
+                dates = [d.get("date") for d in data[:4] if d.get("date")]
+                freq = self._infer_frequency(dates)
+            result = {"dividend": amount, "yield": div_yield, "frequency": freq}
+            self._dividend_overview_cache[symbol] = result
+            return result
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _infer_frequency(dates: list[str]) -> str | None:
+        """Infer payment frequency from a list of dividend dates."""
+        try:
+            parsed = [datetime.strptime(d, "%Y-%m-%d") for d in dates]
+            parsed.sort(reverse=True)
+            if len(parsed) >= 4 and (parsed[0] - parsed[3]).days <= 380:
+                return "quarterly"
+            if len(parsed) >= 2 and (parsed[0] - parsed[1]).days <= 200:
+                return "semi-annually"
+            return None
+        except Exception:
+            return None
