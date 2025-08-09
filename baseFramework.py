@@ -52,6 +52,25 @@ def calculate_dividend_yield(dividend, dividend_yield, price) -> float:
         return (dividend / price) * 100
     return 0.0
 
+
+def calculate_intraday_change(price, previous_close) -> tuple[float, float]:
+    """Return the absolute and percentage change from the previous close."""
+    try:
+        price = float(price)
+    except Exception:
+        price = 0.0
+    try:
+        previous_close = float(previous_close)
+    except Exception:
+        previous_close = 0.0
+
+    change = price - previous_close
+    if previous_close:
+        percent = (change / previous_close) * 100
+    else:
+        percent = 0.0
+    return change, percent
+
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
         super().__init__(master)
@@ -833,6 +852,14 @@ class ResultDropdown(tk.Frame):
     def build_dropdown_content(self):
         price = self.quote_data.get("price") or self.profile_data.get("price")
 
+        prev_close = (
+            self.quote_data.get("previousClose")
+            or self.profile_data.get("previousClose")
+            or 0
+        )
+        change, change_pct = calculate_intraday_change(price, prev_close)
+        change_color = "green" if change >= 0 else "red"
+
         dividend = (
             self.quote_data.get("lastDiv")
             or self.profile_data.get("lastDiv")
@@ -849,6 +876,23 @@ class ResultDropdown(tk.Frame):
             dividend = float(dividend)
         except Exception:
             dividend = 0.0
+
+        change_row = tk.Frame(self, bg="#f5f5f5")
+        change_row.pack(fill="x", padx=10, pady=2)
+        tk.Label(
+            change_row,
+            text="Intra-day Change:",
+            width=15,
+            anchor="w",
+            bg="#f5f5f5",
+        ).pack(side="left")
+        tk.Label(
+            change_row,
+            text=f"{change:+.2f} ({change_pct:+.2f}%)",
+            anchor="w",
+            bg="#f5f5f5",
+            fg=change_color,
+        ).pack(side="left")
 
         metrics = [
             (
