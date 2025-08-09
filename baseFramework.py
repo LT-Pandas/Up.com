@@ -96,15 +96,11 @@ class DraggableBlock(tk.Frame):
         tk.Label(title_row, text=label_text, font=("Arial", 10, "bold"), bg="white").pack(side="left")
 
         # Determine visual layout based on filter type
-        if any(x in base_key.lower() for x in ["sector", "industry", "exchange", "country", "is", "actively", "classes", "marketStage"]):
+        if any(x in base_key.lower() for x in ["sector", "industry", "exchange", "country", "is", "actively", "classes"]):
             dropdown_row = tk.Frame(clone, bg="white")
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
             combo = ttk.Combobox(dropdown_row, font=("Arial", 10), state="disabled")
-            if base_key == "marketStage":
-                combo.set("Product Market Fit (Rule of 40)")
-            else:
-                combo.set("")  # Leave blank for all other dropdowns
-
+            combo.set("")
             combo.pack(fill="x")
         elif any(x in base_key.lower() for x in ["price", "marketcap", "volume", "beta", "limit", "dividend"]):
             if "marketcap" in base_key.lower():
@@ -230,8 +226,7 @@ class StockScreenerApp:
             ("Lower Volume", lambda: self.set_parameter("volumeMoreThan", float)),
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Lower Dividend", lambda: self.set_parameter("dividendMoreThan", float, 0.0)),
-            ("Limit Results", lambda: self.set_parameter("limit", int)),
-            ("Market Stage", lambda: self.open_dropdown("marketStage", FILTER_OPTIONS["marketStage"]))
+            ("Limit Results", lambda: self.set_parameter("limit", int))
         ]
 
         categories = {
