@@ -827,11 +827,13 @@ class StockScreenerApp:
         toggle_btn = tk.Button(bottom_row, text="▼", font=("Arial", 10), bg="white", relief="flat")
         toggle_btn.pack(side="right")
         toggle_btn.config(command=lambda b=toggle_btn: toggle_dropdown(b))
-        # Allow clicking anywhere on the row to toggle the dropdown, not just the arrow button
-        bottom_row.bind(
-            "<Button-1>",
-            lambda e, b=toggle_btn: toggle_dropdown(b) if e.widget is not b else None,
-        )
+        # Allow clicking anywhere on the stock tile to toggle the dropdown,
+        # excluding the remove and toggle buttons to avoid accidental double toggles
+        def on_tile_click(event, btn=toggle_btn):
+            if event.widget not in (btn, remove_btn):
+                toggle_dropdown(btn)
+
+        frame.bind("<Button-1>", on_tile_click)
     
     def remove_stock_tile(self, symbol):
         frame = self.result_tiles.pop(symbol, None)
