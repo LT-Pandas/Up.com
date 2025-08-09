@@ -9,6 +9,7 @@ LABEL_TO_KEY = {
     "Upper Market Cap (10M-4T)": "marketCapLowerThan",
     "Lower Volume": "volumeMoreThan",
     "Upper Volume": "volumeLowerThan",
+    "Lower Dividend": "dividendMoreThan",
     "Lower Beta": "betaMoreThan",
     "Upper Beta": "betaLowerThan",
     # Dropdowns + Boolean filters
