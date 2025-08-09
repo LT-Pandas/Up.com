@@ -18,31 +18,6 @@ def format_number(value: float) -> str:
     except Exception:
         return str(value)
 
-
-def compute_dividend_values(dividend, div_yield, price):
-    """Return display strings for dividend yield and amount.
-
-    If one of ``dividend`` or ``div_yield`` is missing and a price is
-    provided, compute the missing value so that the two metrics remain
-    consistent. Results are returned as formatted strings suitable for the
-    UI dropdown.
-    """
-    try:
-        if div_yield is None and dividend not in [None, "", "N/A"] and price:
-            div_yield = (float(dividend) / float(price)) * 100
-        elif dividend is None and div_yield not in [None, "", "N/A"] and price:
-            dividend = (float(div_yield) / 100) * float(price)
-    except Exception:
-        pass
-
-    div_yield_str = (
-        f"{float(div_yield):.2f}%" if div_yield not in [None, "", "N/A"] else "N/A"
-    )
-    div_price_str = (
-        f"${float(dividend):.2f}" if dividend not in [None, "", "N/A"] else "N/A"
-    )
-    return div_yield_str, div_price_str
-
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
         super().__init__(master)
@@ -131,7 +106,7 @@ class DraggableBlock(tk.Frame):
                 combo.set("")  # Leave blank for all other dropdowns
 
             combo.pack(fill="x")
-        elif any(x in base_key.lower() for x in ["price", "marketcap", "volume", "beta", "dividend", "limit"]):
+        elif any(x in base_key.lower() for x in ["price", "marketcap", "volume", "beta", "limit"]):
             if "marketcap" in base_key.lower():
                 input_row = tk.Frame(clone, bg="white")
                 input_row.pack(fill="x", padx=10, pady=(5, 10))
@@ -252,8 +227,6 @@ class StockScreenerApp:
             ("Upper Market Cap (10M-4T)", lambda: self.set_parameter("marketCapLowerThan", float)),
             ("Lower Beta", lambda: self.set_parameter("betaMoreThan", float)),
             ("Upper Beta", lambda: self.set_parameter("betaLowerThan", float)),
-            ("Min Dividend Yield (%)", lambda: self.set_parameter("dividendMoreThan", float)),
-#            ("Upper Dividend Yield", lambda: self.set_parameter("dividendLowerThan", float)),  #Removed to simplify design (see constants.py)
             ("Lower Volume", lambda: self.set_parameter("volumeMoreThan", float)),
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Limit Results", lambda: self.set_parameter("limit", int)),
@@ -353,7 +326,7 @@ class StockScreenerApp:
             combo.set('') #combo.set(options[0])
             combo.pack(side="left", fill="x", expand=True)
 
-        elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "beta", "dividend", "limit"]):
+        elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "beta", "limit"]):
             if "marketcap" in base_key.lower():
                 input_row = tk.Frame(frame, bg="white")
                 input_row.pack(fill="x", padx=10, pady=(5, 10))
@@ -373,8 +346,6 @@ class StockScreenerApp:
                     from_, to_, resolution = -2, 5, 0.1
                 elif 'volume' in base_key.lower():
                     from_, to_, resolution = 0, 1_000_000, 10_000
-                elif 'dividend' in base_key.lower():
-                    from_, to_, resolution = 0, 20, 0.1
                 elif 'limit' in base_key.lower():
                     from_, to_, resolution = 0, 100, 1
                 else:
@@ -472,7 +443,7 @@ class StockScreenerApp:
 
             entry.bind("<KeyRelease>", on_type)
 
-        elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "beta", "dividend", "limit"]):
+        elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "beta", "limit"]):
             val_var = tk.StringVar(value="")
 
             if 'marketcap' in key.lower():
@@ -526,8 +497,6 @@ class StockScreenerApp:
                     from_, to_, resolution = -2, 5, 0.1
                 elif 'volume' in key.lower():
                     from_, to_, resolution = 0, 1_000_000, 10_000
-                elif 'dividend' in key.lower():
-                    from_, to_, resolution = 0, 20, 0.1
                 elif 'limit' in key.lower():
                     from_, to_, resolution = 0, 100, 1
                 else:
@@ -701,10 +670,7 @@ class StockScreenerApp:
 
     # Remove usage of simpledialog in set_parameter()
     def set_parameter(self, key: str, value_type: type):
-        if 'dividend' in key.lower():
-            default_value = 0.0
-        else:
-            default_value = 100.0 if value_type == float else 100
+        default_value = 100.0 if value_type == float else 100
         self.params[key] = default_value
         self.add_filter_block(key, default_value)
         self.update_display()
@@ -833,18 +799,6 @@ class ResultDropdown(tk.Frame):
     def build_dropdown_content(self):
         price = self.quote_data.get("price") or self.profile_data.get("price")
 
-        div_info = {}
-        if self.backend:
-            div_info = self.backend.get_dividend_overview(self.symbol) or {}
-
-        raw_div_price = div_info.get("dividend")
-        div_yield_value = div_info.get("yield")
-        div_yield, div_price = compute_dividend_values(
-            raw_div_price, div_yield_value, price
-        )
-
-        div_frequency = div_info.get("frequency") or "N/A"
-
         metrics = [
             (
                 "Market Cap",
@@ -856,9 +810,6 @@ class ResultDropdown(tk.Frame):
             ),
             ("P/E Ratio", self.quote_data.get("pe", "N/A")),
             ("Volume", format_number(self.quote_data.get("volume") or 0)),
-            ("Dividend Yield", div_yield),
-            ("Dividend Amount", div_price),
-            ("Dividend Frequency", div_frequency),
             ("Beta", self.profile_data.get("beta", "N/A")),
             ("Listed Sector", self.profile_data.get("sector", "N/A")),
             ("Listed Industry", self.profile_data.get("industry", "N/A")),
