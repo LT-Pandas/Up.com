@@ -136,7 +136,7 @@ class DraggableBlock(tk.Frame):
             combo = ttk.Combobox(dropdown_row, font=("Arial", 10), state="disabled")
             combo.set("")
             combo.pack(fill="x")
-        elif any(x in base_key.lower() for x in ["price", "marketcap", "volume", "beta", "limit", "dividend"]):
+        elif any(x in base_key.lower() for x in ["price", "marketcap", "volume", "limit", "dividend"]):
             if "marketcap" in base_key.lower():
                 input_row = tk.Frame(clone, bg="white")
                 input_row.pack(fill="x", padx=10, pady=(5, 10))
@@ -255,8 +255,6 @@ class StockScreenerApp:
             ("Upper Price", lambda: self.set_parameter("priceLowerThan", float)),
             ("Lower Market Cap (10M-4T)", lambda: self.set_parameter("marketCapMoreThan", float)),
             ("Upper Market Cap (10M-4T)", lambda: self.set_parameter("marketCapLowerThan", float)),
-            ("Lower Beta", lambda: self.set_parameter("betaMoreThan", float)),
-            ("Upper Beta", lambda: self.set_parameter("betaLowerThan", float)),
             ("Lower Volume", lambda: self.set_parameter("volumeMoreThan", float)),
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Lower Dividend", lambda: self.set_parameter("dividendMoreThan", float, 0.0)),
@@ -356,7 +354,7 @@ class StockScreenerApp:
             combo.set('') #combo.set(options[0])
             combo.pack(side="left", fill="x", expand=True)
 
-        elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "beta", "limit", "dividend"]):
+        elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "limit", "dividend"]):
             if "marketcap" in base_key.lower():
                 input_row = tk.Frame(frame, bg="white")
                 input_row.pack(fill="x", padx=10, pady=(5, 10))
@@ -372,8 +370,6 @@ class StockScreenerApp:
 
                 if 'price' in base_key.lower():
                     from_, to_, resolution = 0, 1000, 1
-                elif 'beta' in base_key.lower():
-                    from_, to_, resolution = -2, 5, 0.1
                 elif 'volume' in base_key.lower():
                     from_, to_, resolution = 0, 1_000_000, 10_000
                 elif 'limit' in base_key.lower():
@@ -475,7 +471,7 @@ class StockScreenerApp:
 
             entry.bind("<KeyRelease>", on_type)
 
-        elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "beta", "limit", "dividend"]):
+        elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "limit", "dividend"]):
             val_var = tk.StringVar(value="")
 
             if 'marketcap' in key.lower():
@@ -525,8 +521,6 @@ class StockScreenerApp:
 
                 if 'price' in key.lower():
                     from_, to_, resolution = 0, 10_000, 1
-                elif 'beta' in key.lower():
-                    from_, to_, resolution = -2, 5, 0.1
                 elif 'volume' in key.lower():
                     from_, to_, resolution = 0, 1_000_000, 10_000
                 elif 'limit' in key.lower():
@@ -862,7 +856,6 @@ class ResultDropdown(tk.Frame):
             ),
             ("P/E Ratio", self.quote_data.get("pe", "N/A")),
             ("Volume", format_number(self.quote_data.get("volume") or 0)),
-            ("Beta", self.profile_data.get("beta", "N/A")),
             ("Dividend", f"{dividend:.2f}"),
             ("Dividend Yield", f"{dividend_yield:.2f}%"),
             ("Listed Sector", self.profile_data.get("sector", "N/A")),
