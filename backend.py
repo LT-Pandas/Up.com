@@ -197,6 +197,19 @@ class StockDataService:
             pass
         return None
 
+    def get_dividend_history(self, symbol: str) -> list:
+        """Return historical dividend data for the given symbol."""
+        try:
+            url = (
+                "https://financialmodelingprep.com/stable/dividends?"
+                f"symbol={symbol}&apikey={self.api_key}"
+            )
+            response = requests.get(url)
+            data = response.json()
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
     def get_dividend_overview(self, symbol: str) -> dict:
         """Return dividend amount, yield and frequency using the stable endpoint."""
         if symbol in self._dividend_overview_cache:

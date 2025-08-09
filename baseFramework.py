@@ -18,6 +18,31 @@ def format_number(value: float) -> str:
     except Exception:
         return str(value)
 
+
+def compute_dividend_values(dividend, div_yield, price):
+    """Return display strings for dividend yield and amount.
+
+    If one of ``dividend`` or ``div_yield`` is missing and a price is
+    provided, compute the missing value so that the two metrics remain
+    consistent. Results are returned as formatted strings suitable for the
+    UI dropdown.
+    """
+    try:
+        if div_yield is None and dividend not in [None, "", "N/A"] and price:
+            div_yield = (float(dividend) / float(price)) * 100
+        elif dividend is None and div_yield not in [None, "", "N/A"] and price:
+            dividend = (float(div_yield) / 100) * float(price)
+    except Exception:
+        pass
+
+    div_yield_str = (
+        f"{float(div_yield):.2f}%" if div_yield not in [None, "", "N/A"] else "N/A"
+    )
+    div_price_str = (
+        f"${float(dividend):.2f}" if dividend not in [None, "", "N/A"] else "N/A"
+    )
+    return div_yield_str, div_price_str
+
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
         super().__init__(master)
@@ -813,22 +838,10 @@ class ResultDropdown(tk.Frame):
             div_info = self.backend.get_dividend_overview(self.symbol) or {}
 
         raw_div_price = div_info.get("dividend")
-        div_price = (
-            f"${float(raw_div_price):.2f}"
-            if isinstance(raw_div_price, (int, float))
-            else "N/A"
-        )
-
         div_yield_value = div_info.get("yield")
-        if div_yield_value is None and raw_div_price and price:
-            try:
-                div_yield_value = (float(raw_div_price) / float(price)) * 100
-            except Exception:
-                div_yield_value = None
-        if div_yield_value is not None:
-            div_yield = f"{float(div_yield_value):.2f}%"
-        else:
-            div_yield = "N/A"
+        div_yield, div_price = compute_dividend_values(
+            raw_div_price, div_yield_value, price
+        )
 
         div_frequency = div_info.get("frequency") or "N/A"
 
