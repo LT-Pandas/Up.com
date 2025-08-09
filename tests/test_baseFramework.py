@@ -3,7 +3,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from baseFramework import StockScreenerApp, calculate_dividend_yield
+from baseFramework import (
+    StockScreenerApp,
+    calculate_dividend_yield,
+    calculate_intraday_change,
+)
 import pytest
 
 
@@ -25,3 +29,13 @@ def test_calculate_dividend_yield():
 
     # Yield already given as percentage should remain unchanged
     assert calculate_dividend_yield(1.0, 5, 50) == pytest.approx(5.0)
+
+
+def test_calculate_intraday_change():
+    change, pct = calculate_intraday_change(105, 100)
+    assert change == pytest.approx(5.0)
+    assert pct == pytest.approx(5.0)
+
+    change, pct = calculate_intraday_change(95, 100)
+    assert change == pytest.approx(-5.0)
+    assert pct == pytest.approx(-5.0)
