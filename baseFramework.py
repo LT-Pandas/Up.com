@@ -18,6 +18,32 @@ def format_number(value: float) -> str:
     except Exception:
         return str(value)
 
+
+def extract_dividend(quote_data: dict | None, profile_data: dict | None) -> float:
+    """Return a best-effort dividend value.
+
+    The FinancialModelingPrep API exposes dividend information inconsistently
+    across endpoints.  The screener response includes ``lastAnnualDividend``
+    while the quote and profile endpoints typically expose ``lastDiv``.  Some
+    symbols (e.g. IBM) report unexpected values under ``lastDiv`` so this helper
+    prefers the annual figure when available.
+    """
+
+    quote_data = quote_data or {}
+    profile_data = profile_data or {}
+
+    dividend = (
+        quote_data.get("lastAnnualDividend")
+        or profile_data.get("lastAnnualDividend")
+        or quote_data.get("lastDiv")
+        or profile_data.get("lastDiv")
+        or 0
+    )
+    try:
+        return float(dividend)
+    except Exception:
+        return 0.0
+
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
         super().__init__(master)
@@ -711,10 +737,13 @@ class StockScreenerApp:
 
             for item in data:
                 symbol = item.get('symbol', 'N/A')
-                quote = quote_map.get(symbol, {})
-                # prefer name from item when available
-                if item.get('name'):
-                    quote = {**quote, 'name': item['name']}
+                # Merge screener info with quote info so downstream widgets
+                # have access to fields like ``lastAnnualDividend`` which are
+                # only present in the screener response.  Values from the
+                # screener ``item`` should take precedence for human friendly
+                # names and dividend data, while real‑time price information
+                # from ``quote_map`` still overrides when present.
+                quote = {**quote_map.get(symbol, {}), **item}
                 self.render_stock_tile(symbol, quote)
         else:
             tk.Label(
@@ -805,20 +834,13 @@ class ResultDropdown(tk.Frame):
     def build_dropdown_content(self):
         price = self.quote_data.get("price") or self.profile_data.get("price")
 
-        dividend = (
-            self.quote_data.get("lastDiv")
-            or self.profile_data.get("lastDiv")
-            or 0
-        )
+        dividend = extract_dividend(self.quote_data, self.profile_data)
+
         dividend_yield = (
             self.quote_data.get("dividendYield")
             or self.profile_data.get("dividendYield")
             or 0
         )
-        try:
-            dividend = float(dividend)
-        except Exception:
-            dividend = 0.0
         try:
             dividend_yield = float(dividend_yield)
         except Exception:
