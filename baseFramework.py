@@ -808,11 +808,16 @@ class ResultDropdown(tk.Frame):
     def build_dropdown_content(self):
         price = self.quote_data.get("price") or self.profile_data.get("price")
 
-        div_info = {}
+        raw_div_price = None
+        history_str = "N/A"
         if self.backend:
-            div_info = self.backend.get_dividend_overview(self.symbol) or {}
+            history = self.backend.get_dividend_history(self.symbol)
+            if history:
+                raw_div_price = history[0][1]
+                history_str = ", ".join(f"{d}:{v}" for d, v in history[:5])
+        if not raw_div_price:
+            raw_div_price = self.profile_data.get("lastDiv")
 
-        raw_div_price = div_info.get("dividend")
         div_price = (
             f"${float(raw_div_price):.2f}"
             if isinstance(raw_div_price, (int, float))
@@ -844,8 +849,9 @@ class ResultDropdown(tk.Frame):
             ("P/E Ratio", self.quote_data.get("pe", "N/A")),
             ("Volume", format_number(self.quote_data.get("volume") or 0)),
             ("Dividend Yield", div_yield),
-            ("Dividend Amount", div_price),
-            ("Dividend Frequency", div_frequency),
+            ("Latest Dividend", div_price),
+            ("Dividend History", history_str),
+
             ("Beta", self.profile_data.get("beta", "N/A")),
             ("Listed Sector", self.profile_data.get("sector", "N/A")),
             ("Listed Industry", self.profile_data.get("industry", "N/A")),

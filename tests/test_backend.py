@@ -33,18 +33,11 @@ def test_dividend_params_pass_through(monkeypatch):
     assert 'dividendLowerThan=2' in req.last_url
     assert 'isActivelyTrading=true' in req.last_url
 
-
-def test_get_dividend_overview(monkeypatch):
-    data = [
-        {"date": "2024-05-01", "dividend": 0.25},
-        {"date": "2024-02-01", "dividend": 0.25},
-        {"date": "2023-11-01", "dividend": 0.25},
-        {"date": "2023-08-01", "dividend": 0.25},
-    ]
-    req = DummyRequests(data)
+def test_get_dividend_history_url(monkeypatch):
+    req = DummyRequests()
     monkeypatch.setattr('backend.requests', req)
     svc = StockDataService('KEY', 'http://example.com/?', 'http://quote/')
-    info = svc.get_dividend_overview('AAPL')
-    assert 'stable/dividends?symbol=AAPL&apikey=KEY' in req.last_url
-    assert info['dividend'] == 0.25
-    assert info['frequency'] == 'quarterly'
+    svc.get_dividend_history('AAPL')
+    assert req.last_url == (
+        'https://financialmodelingprep.com/stable/dividends?symbol=AAPL&apikey=KEY'
+    )
