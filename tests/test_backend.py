@@ -25,3 +25,12 @@ def test_dividend_params_pass_through(monkeypatch):
     assert 'dividendMoreThan=1.5' in req.last_url
     assert 'dividendLowerThan=2' in req.last_url
     assert 'isActivelyTrading=true' in req.last_url
+
+def test_get_dividend_history_url(monkeypatch):
+    req = DummyRequests()
+    monkeypatch.setattr('backend.requests', req)
+    svc = StockDataService('KEY', 'http://example.com/?', 'http://quote/')
+    svc.get_dividend_history('AAPL')
+    assert req.last_url == (
+        'https://financialmodelingprep.com/stable/dividends?symbol=AAPL&apikey=KEY'
+    )
