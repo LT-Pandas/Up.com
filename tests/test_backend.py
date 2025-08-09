@@ -6,16 +6,23 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from backend import StockDataService
 
 class DummyRequests:
-    def __init__(self):
+    def __init__(self, data=None):
         self.last_url = None
+        self.data = data or []
+
     def get(self, url, *a, **k):
         self.last_url = url
+
+        data = self.data
+
         class R:
-            def __init__(self, u):
-                self.url = u
+            def __init__(self, d):
+                self._data = d
+
             def json(self):
-                return []
-        return R(url)
+                return self._data
+
+        return R(data)
 
 def test_dividend_params_pass_through(monkeypatch):
     req = DummyRequests()

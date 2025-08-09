@@ -19,6 +19,7 @@ class StockDataService:
         self.dividend_url = "https://financialmodelingprep.com/stable/dividends"
         self._dividend_history_cache: dict[str, list] = {}
 
+
     def _build_query(self, params: dict, exclude: set[str] | None = None,
                      default_limit: int | None = 20) -> str:
         """Convert params to a query string."""

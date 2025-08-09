@@ -817,20 +817,25 @@ class ResultDropdown(tk.Frame):
                 history_str = ", ".join(f"{d}:{v}" for d, v in history[:5])
         if not raw_div_price:
             raw_div_price = self.profile_data.get("lastDiv")
+
         div_price = (
             f"${float(raw_div_price):.2f}"
-            if isinstance(raw_div_price, (int, float, str)) and str(raw_div_price) not in ["", "None", "N/A"]
+            if isinstance(raw_div_price, (int, float))
             else "N/A"
         )
 
-        if raw_div_price and price:
+        div_yield_value = div_info.get("yield")
+        if div_yield_value is None and raw_div_price and price:
             try:
-                dividend_yield_value = (float(raw_div_price) / float(price)) * 100
-                div_yield = f"{dividend_yield_value:.2f}%"
+                div_yield_value = (float(raw_div_price) / float(price)) * 100
             except Exception:
-                div_yield = "N/A"
+                div_yield_value = None
+        if div_yield_value is not None:
+            div_yield = f"{float(div_yield_value):.2f}%"
         else:
             div_yield = "N/A"
+
+        div_frequency = div_info.get("frequency") or "N/A"
 
         metrics = [
             (
@@ -846,6 +851,7 @@ class ResultDropdown(tk.Frame):
             ("Dividend Yield", div_yield),
             ("Latest Dividend", div_price),
             ("Dividend History", history_str),
+
             ("Beta", self.profile_data.get("beta", "N/A")),
             ("Listed Sector", self.profile_data.get("sector", "N/A")),
             ("Listed Industry", self.profile_data.get("industry", "N/A")),
