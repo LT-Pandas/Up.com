@@ -18,6 +18,40 @@ def format_number(value: float) -> str:
     except Exception:
         return str(value)
 
+
+def calculate_dividend_yield(dividend, dividend_yield, price) -> float:
+    """Return the dividend yield as a percentage.
+
+    Parameters are expected to be raw values from the API where
+    ``dividend_yield`` may be either a ratio (e.g. ``0.02`` for 2%) or a
+    percentage (e.g. ``2`` for 2%).  If ``dividend_yield`` is not supplied
+    the value is derived from ``dividend`` and ``price``.
+    """
+    try:
+        dividend = float(dividend)
+    except Exception:
+        dividend = 0.0
+    try:
+        dividend_yield = float(dividend_yield)
+    except Exception:
+        dividend_yield = 0.0
+    try:
+        price = float(price)
+    except Exception:
+        price = 0.0
+
+    if dividend_yield:
+        # Many APIs return dividend yield as a ratio (e.g. 0.02 for 2%)
+        # so multiply by 100 when the value is less than 1.  If the value
+        # already appears to be a percentage leave it unchanged.
+        if dividend_yield < 1:
+            dividend_yield *= 100
+        return dividend_yield
+
+    if dividend and price:
+        return (dividend / price) * 100
+    return 0.0
+
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
         super().__init__(master)
@@ -810,19 +844,17 @@ class ResultDropdown(tk.Frame):
             or self.profile_data.get("lastDiv")
             or 0
         )
-        dividend_yield = (
+        dividend_yield = calculate_dividend_yield(
+            dividend,
             self.quote_data.get("dividendYield")
             or self.profile_data.get("dividendYield")
-            or 0
+            or 0,
+            price,
         )
         try:
             dividend = float(dividend)
         except Exception:
             dividend = 0.0
-        try:
-            dividend_yield = float(dividend_yield)
-        except Exception:
-            dividend_yield = 0.0
 
         metrics = [
             (
