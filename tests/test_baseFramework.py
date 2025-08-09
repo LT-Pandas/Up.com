@@ -12,3 +12,4 @@ def test_get_param_key_from_label():
     assert app.get_param_key_from_label("Sector") == "sector"
     assert app.get_param_key_from_label("Stock Search") == "stockSearch"
     assert app.get_param_key_from_label("Unknown") == "Unknown"
+    assert app.get_param_key_from_label("Lower Dividend") == "dividendMoreThan"

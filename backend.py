@@ -126,6 +126,21 @@ class StockDataService:
                     except Exception:
                         continue
             data = matching_stocks
+        if "dividendMoreThan" in params:
+            try:
+                threshold = float(params["dividendMoreThan"])
+            except Exception:
+                threshold = 0
+            filtered = []
+            for item in data:
+                div = item.get("lastAnnualDividend") or item.get("lastDiv") or 0
+                try:
+                    div = float(div)
+                except Exception:
+                    div = 0
+                if div >= threshold:
+                    filtered.append(item)
+            data = filtered
         return data
 
     def get_quotes(self, symbols: list[str]) -> list:
