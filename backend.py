@@ -100,16 +100,26 @@ class StockDataService:
                         rev4 = float(q4.get("revenue") or 0)
                         net0 = float(q0.get("netIncome") or 0)
                         net1 = float(q1.get("netIncome") or 0)
+                        net2 = float(q2.get("netIncome") or 0)
+                        net3 = float(q3.get("netIncome") or 0)
                         if any(v == 0 for v in [rev0, rev1, rev2, rev3, rev4]):
                             continue
                         growth0 = (rev0 - rev1) / rev1 * 100
                         growth1 = (rev1 - rev2) / rev2 * 100
+                        growth2 = (rev2 - rev3) / rev3 * 100
+                        growth3 = (rev3 - rev4) / rev4 * 100
                         margin0 = (net0 / rev0) * 100
                         margin1 = (net1 / rev1) * 100
-                        rule40_avg = ((growth0 + margin0) + (growth1 + margin1)) / 2
-                        flat_prev1 = (rev2 - rev3) / rev3 * 100
-                        flat_prev2 = (rev3 - rev4) / rev4 * 100
-                        if rule40_avg >= 40 and abs(flat_prev1) <= 5 and abs(flat_prev2) <= 5:
+                        margin2 = (net2 / rev2) * 100
+                        margin3 = (net3 / rev3) * 100
+                        rule40_recent = ((growth0 + margin0) + (growth1 + margin1)) / 2
+                        rule40_prior = ((growth2 + margin2) + (growth3 + margin3)) / 2
+                        if (
+                            rule40_recent >= 40
+                            and rule40_prior < 20
+                            and abs(growth2) <= 5
+                            and abs(growth3) <= 5
+                        ):
                             matching_stocks.append(stock)
                             if len(matching_stocks) >= 20:
                                 break
