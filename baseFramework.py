@@ -146,7 +146,7 @@ class DraggableBlock(tk.Frame):
             bg="white",
             relief='solid',
             bd=1,
-            width=300,
+            width=280,
             height=80,
             highlightthickness=0,
         )
@@ -196,7 +196,7 @@ class StockScreenerApp:
 
     def setup_layout(self):
         # === LEFT PANEL ===
-        self.left_frame = tk.Frame(self.root, width=300, bg="#f0f0f0")
+        self.left_frame = tk.Frame(self.root, width=280, bg="#f0f0f0")
         self.left_frame.pack(side="left", fill='y')
         self.left_frame.pack_propagate(False)  # Prevents shrinking to fit contents
 
@@ -212,11 +212,11 @@ class StockScreenerApp:
 
         block_scroll = tk.Frame(scroll_canvas, bg="#f0f0f0")
         self.block_scroll = block_scroll  # Required for draggable blocks
-        self.block_window_id = scroll_canvas.create_window((0, 0), window=block_scroll, anchor="nw", width=300)
+        self.block_window_id = scroll_canvas.create_window((0, 0), window=block_scroll, anchor="nw", width=280)
 
         def on_frame_configure(event):
             scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all"))
-            scroll_canvas.itemconfig(self.block_window_id, width=300)
+            scroll_canvas.itemconfig(self.block_window_id, width=280)
 
         block_scroll.bind("<Configure>", on_frame_configure)
 
@@ -227,12 +227,12 @@ class StockScreenerApp:
         scroll_canvas.bind("<Leave>", lambda e: scroll_canvas.unbind_all("<MouseWheel>"))
 
         # === CENTER DROP ZONE ===
-        self.block_area = tk.Frame(self.root, width=345, bg="#f9f9f9", relief='sunken', bd=2)
+        self.block_area = tk.Frame(self.root, width=325, bg="#f9f9f9", relief='sunken', bd=2)
         self.block_area.pack_propagate(False)  # Prevent internal widgets from resizing the frame
 
         self.block_area.pack(side="left", fill="y")
 
-        self.snap_zone = tk.Canvas(self.block_area, bg="#f0f8ff", height=700, width=345)
+        self.snap_zone = tk.Canvas(self.block_area, bg="#f0f8ff", height=700, width=325)
         self.snap_zone.pack(fill="both", expand=True, padx=10, pady=10)
         self.block_area.add_filter_block = self.add_filter_block
 
@@ -371,7 +371,7 @@ class StockScreenerApp:
             bg="white",
             relief='solid',
             bd=1,
-            width=300,
+            width=280,
             height=80,
             highlightthickness=0,
         )  # Container for filter preview blocks
@@ -450,7 +450,7 @@ class StockScreenerApp:
             bg="white",
             relief='solid',
             bd=1,
-            width=300,
+            width=280,
             height=80,
             highlightthickness=0,
         )
@@ -694,7 +694,7 @@ class StockScreenerApp:
         tk.Button(top, text="Save", command=submit).pack(pady=10)
 
     def _add_algorithm_preview(self, name):
-        frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
+        frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=280, height=50)
         frame.pack_propagate(False)
         tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white").pack(fill="both", expand=True)
 
