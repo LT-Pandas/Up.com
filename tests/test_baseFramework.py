@@ -9,6 +9,7 @@ from baseFramework import (
     calculate_intraday_change,
 )
 import pytest
+from unittest.mock import MagicMock
 
 
 def test_get_param_key_from_label():
@@ -93,3 +94,4 @@ def test_save_update_delete_algorithm():
     assert app.snap_order == []
     assert app.params == {}
     assert app.snap_zone_placeholder.placed
+
