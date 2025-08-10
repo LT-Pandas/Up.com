@@ -7,6 +7,7 @@ from baseFramework import (
     StockScreenerApp,
     calculate_dividend_yield,
     calculate_intraday_change,
+    DraggableBlock,
 )
 import pytest
 from unittest.mock import MagicMock
@@ -219,3 +220,55 @@ def test_format_algorithm_summary_shows_only_labels():
     assert summary == "Sector || Lower Market Cap (10M-4T) || Industry"
     assert "Basic Materials" not in summary
     assert "1234" not in summary
+
+
+def test_drag_clone_preserves_algorithm_preview(monkeypatch):
+    """Dragging a saved algorithm should clone its preview unchanged."""
+    from types import SimpleNamespace
+
+    # Minimal dummy tk module to avoid initializing a real Tk instance
+    class DummyFrame:
+        def __init__(self, master=None, **kwargs):
+            self.master = master
+            self.children = []
+            if master and hasattr(master, "children"):
+                master.children.append(self)
+            self.kwargs = kwargs
+
+        def pack(self, **kwargs):
+            pass
+
+        def pack_propagate(self, flag):
+            pass
+
+        def winfo_children(self):
+            return self.children
+
+        def cget(self, option):
+            return self.kwargs.get(option)
+
+    class DummyLabel(DummyFrame):
+        pass
+
+    dummy_tk = SimpleNamespace(Frame=DummyFrame, Label=DummyLabel)
+    monkeypatch.setattr("baseFramework.tk", dummy_tk)
+
+    # Prepare a preview block that mimics a saved algorithm preview
+    summary = DummyLabel(text="Block1 || Block2 || Block3")
+    preview = SimpleNamespace(_param_label="Algo", _summary_label=summary)
+
+    app = SimpleNamespace(get_param_key_from_label=lambda x: x)
+
+    block = DraggableBlock.__new__(DraggableBlock)
+    block.preview_block = preview
+    block.app = app
+    block._drag_window = DummyFrame()
+
+    clone = block.clone_preview_block()
+
+    # First child is the title row containing the name label
+    title_row = clone.children[0]
+    assert title_row.children[0].cget("text") == "Algo"
+
+    # Second child is the summary label with first three block names
+    assert clone.children[1].cget("text") == "Block1 || Block2 || Block3"

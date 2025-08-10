@@ -226,9 +226,39 @@ class DraggableBlock(tk.Frame):
 
     def clone_preview_block(self):
         # Reconstruct a visual-only replica of the preview block
-        label_text = self.preview_block._param_label
+        label_text = getattr(self.preview_block, "_param_label", "")
         base_key = self.app.get_param_key_from_label(label_text)
 
+        # Algorithm previews include a summary label of the first few search blocks
+        summary_label = getattr(self.preview_block, "_summary_label", None)
+        if summary_label is not None:
+            # Clone the saved-algorithm preview layout exactly
+            summary_text = summary_label.cget("text")
+            clone = tk.Frame(
+                self._drag_window,
+                bg="white",
+                relief="solid",
+                bd=1,
+                width=280,
+                height=70,
+            )
+            clone.pack_propagate(False)
+
+            title_row = tk.Frame(clone, bg="white")
+            title_row.pack(fill="x", pady=(5, 0), padx=8)
+            tk.Label(title_row, text=label_text, font=("Arial", 10, "bold"), bg="white").pack(side="left")
+
+            tk.Label(
+                clone,
+                text=summary_text,
+                font=("Arial", 9),
+                bg="white",
+                anchor="w",
+                justify="left",
+            ).pack(fill="both", expand=True, padx=8, pady=(0, 5))
+            return clone
+
+        # Default cloning for individual filter preview blocks
         clone = tk.Frame(
             self._drag_window,
             bg="white",
