@@ -58,6 +58,9 @@ def test_save_and_delete_algorithm_clears_workspace():
         def __init__(self, n):
             self.n = n
 
+        def pack_forget(self):
+            pass
+
         def destroy(self):
             destroyed.append(self.n)
 
@@ -169,3 +172,50 @@ def test_open_save_algorithm_dialog_enter(monkeypatch):
     entry.bindings["<Return>"](None)
     assert saved["name"] == "Algo"
     assert destroyed == [True]
+
+
+def test_update_algorithm_rename_replaces_old():
+    app = StockScreenerApp.__new__(StockScreenerApp)
+    app.saved_algorithms = {"Old": {"a": 1}}
+    destroyed = []
+
+    class DummyFrame:
+        def pack_forget(self):
+            destroyed.append("forget")
+
+        def destroy(self):
+            destroyed.append("destroy")
+
+    app.algorithm_previews = {"Old": DummyFrame()}
+
+    added = []
+
+    def stub_add(name):
+        added.append(name)
+        app.algorithm_previews[name] = DummyFrame()
+
+    app._add_algorithm_preview = stub_add
+
+    app.params = {"a": 2}
+    app.current_algorithm = "Old"
+
+    app.update_current_algorithm("New")
+
+    assert "Old" not in app.saved_algorithms
+    assert "Old" not in app.algorithm_previews
+    assert app.saved_algorithms["New"] == {"a": 2}
+    assert added == ["New"]
+    assert destroyed == ["forget", "destroy"]
+
+
+def test_format_algorithm_summary_shows_only_labels():
+    app = StockScreenerApp.__new__(StockScreenerApp)
+    params = {
+        "sector": "Basic Materials",
+        "marketCapMoreThan": 1234,
+        "industry": "Chemicals",
+    }
+    summary = app._format_algorithm_summary(params)
+    assert summary == "Sector || Lower Market Cap (10M-4T) || Industry"
+    assert "Basic Materials" not in summary
+    assert "1234" not in summary

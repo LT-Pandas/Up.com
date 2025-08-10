@@ -947,6 +947,8 @@ class StockScreenerApp:
             self.snap_zone_placeholder.place(relx=0.5, rely=0.5, anchor="center")
 
         self.reposition_snap_zone()
+        # Ensure the preview area and results reflect removal immediately
+        self.update_display()
 
     def clear_workspace(self):
         """Remove all filter blocks and reset parameters."""
@@ -1001,6 +1003,8 @@ class StockScreenerApp:
         self.saved_algorithms.pop(name, None)
         frame = self.algorithm_previews.pop(name, None)
         if frame:
+            # Remove the preview widget so surrounding previews shift up
+            frame.pack_forget()
             frame.destroy()
         if self.current_algorithm == name:
             self.current_algorithm = None
@@ -1020,7 +1024,17 @@ class StockScreenerApp:
             return
 
         if name is not None:
-            self.save_algorithm(name)
+            new_name = name.strip()
+            if not new_name:
+                return
+            if new_name != self.current_algorithm:
+                old_name = self.current_algorithm
+                self.saved_algorithms.pop(old_name, None)
+                frame = self.algorithm_previews.pop(old_name, None)
+                if frame:
+                    frame.pack_forget()
+                    frame.destroy()
+            self.save_algorithm(new_name)
             return
 
         top = Toplevel(self.root)
@@ -1038,6 +1052,13 @@ class StockScreenerApp:
             new_name = name_entry.get().strip()
             if not new_name:
                 return
+            if new_name != self.current_algorithm:
+                old_name = self.current_algorithm
+                self.saved_algorithms.pop(old_name, None)
+                frame = self.algorithm_previews.pop(old_name, None)
+                if frame:
+                    frame.pack_forget()
+                    frame.destroy()
             self.save_algorithm(new_name)
             top.destroy()
 
@@ -1100,15 +1121,13 @@ class StockScreenerApp:
 
     def _format_algorithm_summary(self, params: dict) -> str:
         parts = []
-        for i, (key, value) in enumerate(params.items()):
+        for i, (key, _value) in enumerate(params.items()):
             if i >= 3:
                 break
             label = self.get_label_from_param_key(key)
-            if isinstance(value, (int, float)):
-                value_str = format_number(value)
-            else:
-                value_str = str(value)
-            parts.append(f"{label}: {value_str}")
+            # Only display the block's label, not the value, to keep the
+            # summary concise and focused on which filters are applied.
+            parts.append(label)
         return " || ".join(parts)
 
     def load_algorithm(self, name):
