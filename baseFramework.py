@@ -125,6 +125,7 @@ class ToolTip:
             target = self.widget.winfo_containing(x, y)
             if target and self._is_descendant(target):
                 return
+
         self.tipwindow.destroy()
         self.tipwindow = None
         if ToolTip._active_tip is self:
@@ -135,6 +136,7 @@ class ToolTip:
         """Hide the currently displayed tooltip, if any."""
         if cls._active_tip:
             cls._active_tip.hide(force=True)
+
 
     def _is_descendant(self, target):
         while target:
@@ -658,7 +660,7 @@ class StockScreenerApp:
         tk.Label(title_row, text=label, font=("Arial", 10, "bold"), bg="white").pack(side="left")
 
         remove_button = tk.Button(
-            title_row, text="✖", font=("Arial", 10), fg="red", bg="white", relief="flat",
+            title_row, text="✖", font=("Arial", 10), fg="#ff6b6b", bg="white", relief="flat",
             command=lambda: self.remove_filter_block(block_frame, key)
         )
         remove_button.pack(side="right")
@@ -1019,14 +1021,13 @@ class StockScreenerApp:
             text="✖",
             font=("Arial", 10, "bold"),
             bg="white",
-            fg="#721c24",
+            fg="#ff6b6b",
+
             relief="flat",
             command=lambda n=name: self.delete_algorithm(n),
         )
         btn.place(x=2, rely=0.5, anchor="w")
-        btn.bind("<Button-1>", lambda e: "break")
-        btn.bind("<B1-Motion>", lambda e: "break")
-        btn.bind("<ButtonRelease-1>", lambda e: "break")
+        btn.lift()  # ensure the button sits above the label
 
         frame.pack(pady=4)
         self.algorithm_previews[name] = frame
@@ -1139,7 +1140,7 @@ class StockScreenerApp:
         self.result_tiles[symbol] = frame
 
         # Remove button
-        remove_btn = tk.Button(frame, text="✖", font=("Arial", 10), fg="red", bg="white", relief="flat",
+        remove_btn = tk.Button(frame, text="✖", font=("Arial", 10), fg="#ff6b6b", bg="white", relief="flat",
             command=lambda: self.remove_stock_tile(symbol))
         remove_btn.place(relx=1.0, x=-16, y=4, anchor="ne")
 
