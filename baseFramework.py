@@ -193,6 +193,8 @@ class StockScreenerApp:
         # Track preview widgets for each saved algorithm so they can be
         # updated or removed later.
         self.algorithm_previews = {}
+        # Name of the algorithm currently loaded in the editor, if any
+        self.current_algorithm = None
         self.backend = StockDataService(self.api_key, self.base_url, self.quote_url)
 
         self.setup_layout()
@@ -325,14 +327,14 @@ class StockScreenerApp:
         )
         algo_btn.pack(padx=10, pady=(5, 5), fill="x")
 
-        del_btn = tk.Button(
+        update_btn = tk.Button(
             self.block_scroll,
-            text="− Delete Algorithm",
-            bg="#f8d7da", fg="#721c24",
+            text="↻ Update Algorithm",
+            bg="#d4edda", fg="#155724",
             font=("Arial", 10, "bold"),
-            command=self.open_delete_algorithm_dialog
+            command=self.update_current_algorithm,
         )
-        del_btn.pack(padx=10, pady=(0, 15), fill="x")
+        update_btn.pack(padx=10, pady=(0, 15), fill="x")
 
         self.algo_header = tk.Label(
             self.block_scroll,
@@ -843,6 +845,7 @@ class StockScreenerApp:
         duplicates.
         """
         self.saved_algorithms[name] = dict(self.params)
+        self.current_algorithm = name
         if name not in self.algorithm_previews:
             self._add_algorithm_preview(name)
 
@@ -852,38 +855,41 @@ class StockScreenerApp:
         frame = self.algorithm_previews.pop(name, None)
         if frame:
             frame.destroy()
+        if self.current_algorithm == name:
+            self.current_algorithm = None
 
-    def open_delete_algorithm_dialog(self):
-        if not self.saved_algorithms:
-            messagebox.showinfo("Delete Algorithm", "No saved algorithms to delete.")
+    def update_current_algorithm(self):
+        """Update the currently loaded algorithm with current parameters."""
+        if not self.current_algorithm:
+            messagebox.showinfo("Update Algorithm", "No algorithm loaded to update.")
             return
-
-        top = Toplevel(self.root)
-        top.title("Delete Algorithm")
-        top.geometry("300x200")
-
-        listbox = tk.Listbox(top)
-        for name in self.saved_algorithms:
-            listbox.insert(tk.END, name)
-        listbox.pack(padx=10, pady=10, fill="both", expand=True)
-
-        def delete_selected():
-            selection = listbox.curselection()
-            if not selection:
-                return
-            name = listbox.get(selection[0])
-            self.delete_algorithm(name)
-            top.destroy()
-
-        tk.Button(top, text="Delete", command=delete_selected).pack(pady=5)
+        self.save_algorithm(self.current_algorithm)
 
     def _add_algorithm_preview(self, name):
         frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
         frame.pack_propagate(False)
-        tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white").pack(fill="both", expand=True)
+
+        label = tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white")
+        label.pack(fill="both", expand=True, padx=(20, 0))
 
         frame._param_label = name
         DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
+
+        # Add delete "x" button on the far left
+        btn = tk.Button(
+            frame,
+            text="✖",
+            font=("Arial", 10, "bold"),
+            bg="white",
+            fg="#721c24",
+            relief="flat",
+            command=lambda n=name: self.delete_algorithm(n),
+        )
+        btn.place(x=2, rely=0.5, anchor="w")
+        btn.bind("<Button-1>", lambda e: "break")
+        btn.bind("<B1-Motion>", lambda e: "break")
+        btn.bind("<ButtonRelease-1>", lambda e: "break")
+
         frame.pack(pady=4)
         self.algorithm_previews[name] = frame
 
@@ -904,6 +910,7 @@ class StockScreenerApp:
 
         self.reposition_snap_zone()
         self.update_display()
+        self.current_algorithm = name
 
     def open_dropdown(self, key, options):
         def submit_selection():
