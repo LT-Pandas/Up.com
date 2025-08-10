@@ -7,6 +7,7 @@ from constants import (
     FILTER_OPTIONS,
     get_param_key_from_label as util_get_param_key_from_label,
     get_label_from_param_key as util_get_label_from_param_key,
+    get_preview_description as util_get_preview_description,
 )
 from backend import StockDataService
 from datetime import datetime
@@ -70,6 +71,47 @@ def calculate_intraday_change(price, previous_close) -> tuple[float, float]:
     else:
         percent = 0.0
     return change, percent
+
+
+class ToolTip:
+    def __init__(self, widget, text: str):
+        self.widget = widget
+        self.text = text
+        self.tipwindow = None
+        widget.bind("<Enter>", self.show)
+        widget.bind("<Leave>", self.hide)
+
+    def show(self, event=None):
+        if self.tipwindow or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 10
+        self.tipwindow = tw = tk.Toplevel(self.widget)
+        tw.overrideredirect(True)
+        tw.attributes("-topmost", True)
+        label = tk.Label(
+            tw,
+            text=self.text,
+            background="#ffffe0",
+            relief="solid",
+            borderwidth=1,
+            font=("Arial", 9),
+            justify="left",
+            wraplength=250,
+        )
+        label.pack(ipadx=2)
+        tw.geometry(f"+{x}+{y}")
+
+    def hide(self, event=None):
+        if self.tipwindow:
+            self.tipwindow.destroy()
+            self.tipwindow = None
+
+
+def add_tooltip(widget, text: str):
+    ToolTip(widget, text)
+    for child in widget.winfo_children():
+        add_tooltip(child, text)
 
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
@@ -538,6 +580,10 @@ class StockScreenerApp:
 
         frame._title_row = title_row  # store reference
         frame._param_label = label  # used for dragging
+
+        desc = util_get_preview_description(label)
+        add_tooltip(frame, desc)
+
         return frame
 
     def add_filter_block(self, label, value=None):
