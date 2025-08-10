@@ -280,7 +280,7 @@ class DraggableBlock(tk.Frame):
             dropdown_row = tk.Frame(clone, bg="white")
             dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
             combo = ttk.Combobox(dropdown_row, font=("Arial", 10), state="disabled")
-            combo.set("")
+            combo.set("Select option")
             combo.pack(fill="x")
         elif any(x in base_key.lower() for x in ["price", "marketcap", "volume", "limit", "dividend"]):
             if "marketcap" in base_key.lower():
@@ -655,7 +655,7 @@ class StockScreenerApp:
             search_row = tk.Frame(frame, bg="white")
             search_row.pack(fill="x", padx=10, pady=(5, 10))
             entry = tk.Entry(search_row, font=("Arial", 10), state="disabled")
-            entry.insert(0, "")
+            entry.insert(0, "Type here")
             entry.pack(side="left", fill="x", expand=True)
 
         frame._title_row = title_row  # store reference
@@ -702,26 +702,36 @@ class StockScreenerApp:
                 dropdown_row = tk.Frame(block_frame, bg="white")
                 dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
 
-                default = value if value is not None else (options[0] if options else "")
-                combo = ttk.Combobox(dropdown_row, values=[str(o) for o in options], font=("Arial", 10), state="readonly")
-                combo.set(str(default))
+                options_str = [str(o) for o in options]
+                placeholder = "Select option"
+                values_list = [placeholder] + options_str
+                if value is not None:
+                    var = tk.StringVar(value=str(value))
+                    self.params[key] = value
+                else:
+                    var = tk.StringVar(value=placeholder)
+                combo = ttk.Combobox(
+                    dropdown_row,
+                    textvariable=var,
+                    values=values_list,
+                    font=("Arial", 10),
+                    state="readonly",
+                )
 
                 combo.pack(side="left", fill="x", expand=True)
 
-                if default != "":
-                    self.params[key] = default
-
-                def update_selection(event):
-                    selected = combo.get()
-                    if selected:
+                def update_selection(event=None):
+                    selected = var.get()
+                    if selected and selected != placeholder:
                         try:
-                            idx = combo.current()
+                            idx = options_str.index(selected)
                             self.params[key] = options[idx]
                         except Exception:
                             self.params[key] = selected
+                        self.delayed_search()
                     else:
+                        var.set(placeholder)
                         self.params.pop(key, None)
-                    self.delayed_search()  # use this instead of update_display()
 
                 combo.bind("<<ComboboxSelected>>", update_selection)
             elif isinstance(options, dict):
@@ -801,17 +811,21 @@ class StockScreenerApp:
             search_row = tk.Frame(block_frame, bg="white")
             search_row.pack(fill="x", padx=10, pady=(5, 10))
 
-            entry = tk.Entry(search_row, font=("Arial", 10))
+            placeholder = "Type here"
+            entry = tk.Entry(search_row, font=("Arial", 10), fg="gray")
+            entry.insert(0, placeholder)
             entry.pack(side="left", fill="x", expand=True)
             if value is not None:
+                entry.delete(0, tk.END)
                 entry.insert(0, str(value))
+                entry.config(fg="black")
                 self.params[key] = value
 
             self._stock_search_delay_id = None
 
             def delayed_update():
                 text = entry.get()
-                if text:
+                if text and text != placeholder:
                     self.params[key] = text
                 else:
                     self.params.pop(key, None)
@@ -822,7 +836,20 @@ class StockScreenerApp:
                     self.root.after_cancel(self._stock_search_delay_id)
                 self._stock_search_delay_id = self.root.after(300, delayed_update)
 
+            def on_focus_in(event):
+                if entry.get() == placeholder:
+                    entry.delete(0, tk.END)
+                    entry.config(fg="black")
+
+            def on_focus_out(event):
+                if not entry.get():
+                    entry.insert(0, placeholder)
+                    entry.config(fg="gray")
+                    self.params.pop(key, None)
+
             entry.bind("<KeyRelease>", on_type)
+            entry.bind("<FocusIn>", on_focus_in)
+            entry.bind("<FocusOut>", on_focus_out)
 
         elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "limit", "dividend"]):
             val_var = tk.StringVar(value="")
