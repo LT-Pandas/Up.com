@@ -78,7 +78,7 @@ def test_save_update_delete_algorithm():
     assert app.current_algorithm == "Test"
 
     app.params = {"a": 2}
-    app.update_current_algorithm()
+    app.update_current_algorithm("Test")
     assert app.saved_algorithms["Test"] == {"a": 2}
     assert added == ["Test"]  # no duplicate preview added
     app.snap_order = [(1, DummyFrame("block"))]
