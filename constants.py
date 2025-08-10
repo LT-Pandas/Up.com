@@ -47,6 +47,52 @@ LABEL_TO_KEY = {
 KEY_TO_LABEL = {v: k for k, v in LABEL_TO_KEY.items()}
 
 
+# Friendly one-liners describing what each preview block does.  These
+# are displayed as tooltips when a user hovers over a block in the UI.
+PREVIEW_DESCRIPTIONS = {
+    "Stock Search": "Look up a stock by name or ticker to jump straight in.",
+    "Sector": "Filter companies by the slice of the economy they play in.",
+    "Industry": "Drill down to the specific line of work that interests you.",
+    "Exchange": "Choose the trading floor where the stock struts its stuff.",
+    "Is ETF?": "Decide if you want a basket of stocks instead of a single hero.",
+    "Is Fund?": "Limit results to pooled investments for the crowd-minded.",
+    "Lower Price": "Start your treasure hunt at this price or higher.",
+    "Upper Price": "Skip anything that costs more than this price tag.",
+    "Lower Market Cap (10M-4T)": "Consider only businesses at least this beefy.",
+    "Upper Market Cap (10M-4T)": "Ignore companies that have outgrown this market cap ceiling.",
+    "Lower Volume": "Look only at stocks that trade at least this much in a day.",
+    "Upper Volume": "Avoid tickers that are busier than your local coffee shop.",
+    "Lower Dividend": "Show only companies handing out dividends at or above this mark.",
+    "Limit Results": "Keep your list short enough to read before lunch.",
+    "Revenue (TTM) ≥": "Focus on firms pulling in at least this much over the last year.",
+    "YoY Revenue Growth ≥ (%)": "Keep only companies whose sales grew at least this much compared to last year.",
+    "YoY Growth Count (≥ last 4q)": "See how many consecutive quarters of growth are needed to impress you.",
+    "Max QoQ Revenue Declines (last 4q)": "Set the maximum number of quarterly sales slip-ups you're willing to forgive.",
+    "Gross Margin % ≥": "Find businesses keeping at least this slice of each dollar they earn.",
+    "Δ Gross Margin YoY (pp) ≥": "Demand at least this positive swing in profit margin compared to last year.",
+    "Opex % Slope (last 4q) ≤": "Pick companies whose spending isn't ballooning faster than a party balloon.",
+    "Operating CF (TTM) ≥": "Stick with firms bringing in at least this much real cash over the year.",
+    "Δ Operating CF TTM YoY ≥": "Ask for at least this boost in cash flow compared to last year.",
+    "R&D % of Revenue ≤": "Limit to companies that don't treat research like a bottomless piggy bank.",
+    "Δ R&D % YoY (pp) ≤": "Favor businesses keeping their research budget from creeping up too much.",
+    "R&D Growth ≤ Revenue Growth (YoY)": "Choose companies where experimentation isn't outrunning sales.",
+    "Deferred Revenue Rising (YoY)": "Highlight firms whose prepaid orders aren't taking a nap.",
+    "Cash Conversion Cycle Slope (last 4q) ≤": "Select businesses turning stock into cash without dawdling.",
+    "Rule of 40 (Growth + Op Margin) ≥": "Insist on companies that score at least this on the growth-plus-profit scoreboard.",
+    "Capex % of Revenue ≤": "Avoid firms dumping too much of their earnings into shiny new toys.",
+    "YoY Growth (%)": "Compare today's revenue to last year's, like a progress report.",
+    "Profit Margin (%)": "See what part of each dollar in sales a company actually keeps.",
+    "R&D Ratio (%)": "Check how much revenue is reinvested in fresh ideas.",
+    "Company Age (yrs)": "Set a minimum age—no startups in diapers unless you say so.",
+    "MVP Stage": "Filter by how far along a company's big idea has matured.",
+}
+
+
+def get_preview_description(label: str) -> str:
+    """Return a short human-friendly description for a preview block."""
+    return PREVIEW_DESCRIPTIONS.get(label, "")
+
+
 def get_param_key_from_label(label: str) -> str:
     """Return the API parameter key for a given UI label."""
     return LABEL_TO_KEY.get(label, label)
