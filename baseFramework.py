@@ -972,13 +972,14 @@ class StockScreenerApp:
         name_entry.pack(padx=10, fill="x")
         name_entry.focus()
 
-        def submit():
+        def submit(event=None):
             name = name_entry.get().strip()
             if not name:
                 return
             self.save_algorithm(name)
             top.destroy()
 
+        name_entry.bind("<Return>", submit)
         tk.Button(top, text="Save", command=submit).pack(pady=10)
 
     def save_algorithm(self, name: str):
