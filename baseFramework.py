@@ -948,11 +948,15 @@ class StockScreenerApp:
 
         self.reposition_snap_zone()
 
-        # Trigger a delayed search so results update shortly after
-        # a block is removed.  The delay gives the UI time to settle
-        # and prevents rapid successive updates when multiple blocks
-        # are removed in quick succession.
-        self.delayed_search(1000)
+    def clear_workspace(self):
+        """Remove all filter blocks and reset parameters."""
+        for _, frame in self.snap_order:
+            frame.destroy()
+        self.snap_order.clear()
+        self.params.clear()
+        self.snap_zone_placeholder.place(relx=0.5, rely=0.5, anchor="center")
+        self.reposition_snap_zone()
+        self.update_display()
 
     def open_save_algorithm_dialog(self):
         if not self.params:
@@ -997,6 +1001,7 @@ class StockScreenerApp:
             frame.destroy()
         if self.current_algorithm == name:
             self.current_algorithm = None
+            self.clear_workspace()
 
     def update_current_algorithm(self):
         """Update the currently loaded algorithm with current parameters."""
@@ -1022,7 +1027,6 @@ class StockScreenerApp:
             font=("Arial", 10, "bold"),
             bg="white",
             fg="#ff6b6b",
-
             relief="flat",
             command=lambda n=name: self.delete_algorithm(n),
         )
@@ -1038,10 +1042,7 @@ class StockScreenerApp:
             return
 
         # Clear existing workspace
-        for _, frame in self.snap_order:
-            frame.destroy()
-        self.snap_order.clear()
-        self.params.clear()
+        self.clear_workspace()
 
         for key, value in params.items():
             label = self.get_label_from_param_key(key)
