@@ -1019,6 +1019,8 @@ class StockScreenerApp:
 
 
     def remove_filter_block(self, frame, key):
+        """Remove a filter block immediately but delay search results."""
+
         frame.destroy()
 
         if key in self.params:
@@ -1030,8 +1032,9 @@ class StockScreenerApp:
             self.snap_zone_placeholder.place(relx=0.5, rely=0.5, anchor="center")
 
         self.reposition_snap_zone()
-        # Ensure the preview area and results reflect removal immediately
-        self.update_display()
+
+        # Delay updating the results so the UI has time to settle
+        self.delayed_search(delay_ms=500)
 
     def clear_workspace(self):
         """Remove all filter blocks and reset parameters."""
