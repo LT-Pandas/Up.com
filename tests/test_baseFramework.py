@@ -42,12 +42,14 @@ def test_calculate_intraday_change():
     assert pct == pytest.approx(-5.0)
 
 
-def test_save_update_delete_algorithm():
+def test_save_and_delete_algorithm_clears_workspace():
     app = StockScreenerApp.__new__(StockScreenerApp)
     app.saved_algorithms = {}
     app.algorithm_previews = {}
     app.params = {"a": 1}
-    app.current_algorithm = None
+    app.snap_order = []
+    app.current_algorithm = "Test"
+
 
     added = []
     destroyed = []
@@ -81,6 +83,7 @@ def test_save_update_delete_algorithm():
     app.update_current_algorithm("Test")
     assert app.saved_algorithms["Test"] == {"a": 2}
     assert added == ["Test"]  # no duplicate preview added
+
     app.snap_order = [(1, DummyFrame("block"))]
     app.snap_zone_placeholder = DummyPlaceholder()
     app.reposition_snap_zone = lambda: None
@@ -90,8 +93,79 @@ def test_save_update_delete_algorithm():
     assert "Test" not in app.saved_algorithms
     assert "Test" not in app.algorithm_previews
     assert destroyed == ["Test", "block"]
-    assert app.current_algorithm is None
     assert app.snap_order == []
     assert app.params == {}
     assert app.snap_zone_placeholder.placed
+    assert app.current_algorithm is None
 
+
+def test_open_save_algorithm_dialog_enter(monkeypatch):
+    app = StockScreenerApp.__new__(StockScreenerApp)
+    app.root = MagicMock()
+    app.params = {"a": 1}
+
+    saved = {}
+    app.save_algorithm = lambda name: saved.setdefault("name", name)
+
+    destroyed = []
+
+    class DummyTop:
+        def __init__(self, root):
+            self.root = root
+
+        def title(self, *args, **kwargs):
+            pass
+
+        def geometry(self, *args, **kwargs):
+            pass
+
+        def destroy(self):
+            destroyed.append(True)
+
+    top = DummyTop(app.root)
+    monkeypatch.setattr("baseFramework.Toplevel", lambda root: top)
+
+    class DummyLabel:
+        def __init__(self, parent, text):
+            pass
+
+        def pack(self, **kwargs):
+            pass
+
+    monkeypatch.setattr("baseFramework.tk.Label", DummyLabel)
+
+    class DummyEntry:
+        def __init__(self, parent):
+            self.bindings = {}
+
+        def pack(self, **kwargs):
+            pass
+
+        def focus(self):
+            pass
+
+        def get(self):
+            return "Algo"
+
+        def bind(self, sequence, func):
+            self.bindings[sequence] = func
+
+    entry = DummyEntry(top)
+    monkeypatch.setattr("baseFramework.tk.Entry", lambda parent: entry)
+
+    class DummyButton:
+        def __init__(self, parent, text, command):
+            self.command = command
+
+        def pack(self, **kwargs):
+            pass
+
+    monkeypatch.setattr("baseFramework.tk.Button", DummyButton)
+
+    app.open_save_algorithm_dialog()
+
+    assert "<Return>" in entry.bindings
+    # simulate pressing Enter
+    entry.bindings["<Return>"](None)
+    assert saved["name"] == "Algo"
+    assert destroyed == [True]

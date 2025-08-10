@@ -972,13 +972,14 @@ class StockScreenerApp:
         name_entry.pack(padx=10, fill="x")
         name_entry.focus()
 
-        def submit():
+        def submit(event=None):
             name = name_entry.get().strip()
             if not name:
                 return
             self.save_algorithm(name)
             top.destroy()
 
+        name_entry.bind("<Return>", submit)
         tk.Button(top, text="Save", command=submit).pack(pady=10)
 
     def save_algorithm(self, name: str):
@@ -992,6 +993,8 @@ class StockScreenerApp:
         self.current_algorithm = name
         if name not in self.algorithm_previews:
             self._add_algorithm_preview(name)
+        else:
+            self._update_algorithm_preview(name)
 
     def delete_algorithm(self, name: str):
         """Delete a previously saved algorithm."""
@@ -1043,30 +1046,70 @@ class StockScreenerApp:
         top.bind("<Return>", submit)
 
     def _add_algorithm_preview(self, name):
-        frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
+        frame = tk.Frame(
+            self.algo_container,
+            bg="white",
+            relief="solid",
+            bd=1,
+            width=280,
+            height=70,
+        )
         frame.pack_propagate(False)
 
-        label = tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white")
-        label.pack(fill="both", expand=True, padx=(20, 0))
+        title_row = tk.Frame(frame, bg="white")
+        title_row.pack(fill="x", pady=(5, 0), padx=8)
+        tk.Label(title_row, text=name, font=("Arial", 10, "bold"), bg="white").pack(side="left")
 
-        frame._param_label = name
-        DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
-
-        # Add delete "x" button on the far left
         btn = tk.Button(
-            frame,
+            title_row,
             text="✖",
-            font=("Arial", 10, "bold"),
+            font=("Arial", 10),
             bg="white",
             fg="#ff6b6b",
             relief="flat",
             command=lambda n=name: self.delete_algorithm(n),
         )
-        btn.place(x=2, rely=0.5, anchor="w")
-        btn.lift()  # ensure the button sits above the label
+        btn.pack(side="right")
+
+        summary = self._format_algorithm_summary(self.saved_algorithms.get(name, {}))
+        summary_label = tk.Label(
+            frame,
+            text=summary,
+            font=("Arial", 9),
+            bg="white",
+            anchor="w",
+            justify="left",
+        )
+        summary_label.pack(fill="both", expand=True, padx=8, pady=(0, 5))
+
+        frame._summary_label = summary_label
+        frame._param_label = name
+        DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
 
         frame.pack(pady=4)
         self.algorithm_previews[name] = frame
+
+    def _update_algorithm_preview(self, name):
+        frame = self.algorithm_previews.get(name)
+        if not frame:
+            return
+        summary = self._format_algorithm_summary(self.saved_algorithms.get(name, {}))
+        label = getattr(frame, "_summary_label", None)
+        if label:
+            label.config(text=summary)
+
+    def _format_algorithm_summary(self, params: dict) -> str:
+        parts = []
+        for i, (key, value) in enumerate(params.items()):
+            if i >= 3:
+                break
+            label = self.get_label_from_param_key(key)
+            if isinstance(value, (int, float)):
+                value_str = format_number(value)
+            else:
+                value_str = str(value)
+            parts.append(f"{label}: {value_str}")
+        return " || ".join(parts)
 
     def load_algorithm(self, name):
         params = self.saved_algorithms.get(name)
