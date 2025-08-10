@@ -41,6 +41,7 @@ LABEL_TO_KEY = {
     # Misc Filters
     "Stock Search": "stockSearch",
     "Limit Results": "limit",
+    "IPO Listings": "ipoDays",
 }
 
 # Reverse lookup for labels from parameter keys
@@ -64,6 +65,7 @@ PREVIEW_DESCRIPTIONS = {
     "Upper Volume": "Avoid tickers that are busier than your local coffee shop.",
     "Lower Dividend": "Show only companies handing out dividends at or above this mark.",
     "Limit Results": "Keep your list short enough to read before lunch.",
+    "IPO Listings": "Browse companies slated to go public soon.",
     "Revenue (TTM) ≥": "Focus on firms pulling in at least this much over the last year.",
     "YoY Revenue Growth ≥ (%)": "Keep only companies whose sales grew at least this much compared to last year.",
     "YoY Growth Count (≥ last 4q)": "See how many consecutive quarters of growth are needed to impress you.",
@@ -178,6 +180,7 @@ FILTER_OPTIONS = {
     "isFund": ["true", "false"],
     "isActivelyTrading": ["true", "false"],
     "includeAllShareClasses": ["true", "false"],
+    "ipoDays": {"from": 1, "to": 365, "resolution": 1, "default": 30},
     "yoyGrowth": ["Annual", "Quarterly"],
     "profitMargin": ["Annual", "Quarterly"],
     "rdRatio": ["Annual", "Quarterly"],

@@ -341,6 +341,7 @@ class StockScreenerApp:
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Lower Dividend", lambda: self.set_parameter("dividendMoreThan", float, 0.0)),
             ("Limit Results", lambda: self.set_parameter("limit", int)),
+            ("IPO Listings", lambda: self.set_parameter("ipoDays", int, 30)),
             # MVP Filters
             ("Revenue (TTM) ≥", lambda: self.set_parameter("rev_ttm_min", float)),
             ("YoY Revenue Growth ≥ (%)", lambda: self.set_parameter("yoy_rev_growth_pct_min", float)),
@@ -420,7 +421,7 @@ class StockScreenerApp:
 
         for label, callback in filters:
             param_key = self.get_param_key_from_label(label)
-            if param_key in ["stockSearch", "limit"]:
+            if param_key in ["stockSearch", "limit", "ipoDays"]:
                 categories["Tools"].append((label, callback))
             elif param_key in ["sector", "industry", "exchange", "isEtf", "isFund"]:
                 categories["Drop Down Filters"].append((label, callback))
@@ -1072,6 +1073,8 @@ class StockScreenerApp:
                 # prefer name from item when available
                 if item.get('name'):
                     quote = {**quote, 'name': item['name']}
+                if item.get('ipoDate'):
+                    quote = {**quote, 'ipoDate': item['ipoDate']}
                 self.render_stock_tile(symbol, quote)
         else:
             tk.Label(
@@ -1138,6 +1141,18 @@ class StockScreenerApp:
         bottom_row.pack(fill="x", padx=10, pady=(3, 8))
         tk.Label(bottom_row, text=name, font=("Arial", 9), fg="gray", bg="white",
                 justify="left", anchor="w").pack(side="left", fill="x", expand=True)
+
+        if quote_data.get('ipoDate'):
+            date_row = tk.Frame(frame, bg="white")
+            date_row.pack(fill="x", padx=10, pady=(0, 5))
+            tk.Label(
+                date_row,
+                text=f"IPO Date: {quote_data['ipoDate']}",
+                font=("Arial", 9),
+                fg="blue",
+                bg="white",
+                anchor="w",
+            ).pack(side="left")
 
         toggle_btn = tk.Button(bottom_row, text="▼", font=("Arial", 10), bg="white", relief="flat")
         toggle_btn.pack(side="right")
