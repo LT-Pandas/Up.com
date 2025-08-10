@@ -219,3 +219,41 @@ def test_format_algorithm_summary_shows_only_labels():
     assert summary == "Sector || Lower Market Cap (10M-4T) || Industry"
     assert "Basic Materials" not in summary
     assert "1234" not in summary
+
+
+def test_drag_bindings_skip_buttons(monkeypatch):
+    from baseFramework import DraggableBlock, tk
+
+    block = DraggableBlock.__new__(DraggableBlock)
+    block.start_drag = lambda e: None
+    block.do_drag = lambda e: None
+    block.stop_drag = lambda e: None
+
+    class DummyWidget:
+        def __init__(self):
+            self.bind_calls = []
+            self.children = []
+
+        def bind(self, event, func, add=None):
+            self.bind_calls.append(event)
+
+        def winfo_children(self):
+            return self.children
+
+    class DummyButton(DummyWidget):
+        pass
+
+    monkeypatch.setattr("baseFramework.tk.Button", DummyButton)
+
+    root = DummyWidget()
+    btn = DummyButton()
+    root.children.append(btn)
+
+    block.bind_all_children(root)
+
+    assert set(root.bind_calls) == {
+        "<ButtonPress-1>",
+        "<B1-Motion>",
+        "<ButtonRelease-1>",
+    }
+    assert btn.bind_calls == []
