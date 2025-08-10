@@ -427,6 +427,7 @@ class StockScreenerApp:
                 container is packed *after* its header so the blocks appear
                 directly beneath the correct title instead of collecting at
                 the end of the filter list."""
+
                 if frame.winfo_ismapped():
                     frame.pack_forget()
                     btn.config(text="▼")
@@ -851,6 +852,12 @@ class StockScreenerApp:
             self.snap_zone_placeholder.place(relx=0.5, rely=0.5, anchor="center")
 
         self.reposition_snap_zone()
+
+        # Trigger a delayed search so results update shortly after
+        # a block is removed.  The delay gives the UI time to settle
+        # and prevents rapid successive updates when multiple blocks
+        # are removed in quick succession.
+        self.delayed_search(1000)
 
     def open_save_algorithm_dialog(self):
         if not self.params:
