@@ -93,14 +93,13 @@ class ToolTip:
         if self.tipwindow or not self.text:
             return
         ToolTip._active_tip = self
-
         self.tipwindow = tw = tk.Toplevel(self.widget)
         tw.overrideredirect(True)
         tw.attributes("-topmost", True)
         label = tk.Label(
             tw,
             text=self.text,
-            background="#89CFF0",
+            background="#f6fbff",
             relief="solid",
             borderwidth=1,
             font=("Arial", 9),
