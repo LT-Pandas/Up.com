@@ -300,3 +300,50 @@ def test_remove_filter_block_delays_results_not_removal():
 
     # Search results are scheduled with a 0.5 second delay
     app.delayed_search.assert_called_once_with(delay_ms=500)
+
+
+def test_dropdown_filter_block_adds_without_error(monkeypatch):
+    app = StockScreenerApp.__new__(StockScreenerApp)
+    app.params = {}
+    app.snap_order = []
+    app.delayed_search = lambda *a, **k: None
+    app.reposition_snap_zone = lambda: None
+
+    app.snap_zone = MagicMock()
+    app.snap_zone.create_window.return_value = 1
+
+    app.snap_zone_placeholder = MagicMock()
+
+    class DummyStringVar:
+        def __init__(self, value=""):
+            self.value = value
+
+        def get(self):
+            return self.value
+
+        def set(self, v):
+            self.value = v
+
+    monkeypatch.setattr("baseFramework.tk.StringVar", DummyStringVar)
+    monkeypatch.setattr("baseFramework.tk.Frame", lambda *a, **k: MagicMock())
+    monkeypatch.setattr("baseFramework.tk.Label", lambda *a, **k: MagicMock())
+    monkeypatch.setattr("baseFramework.tk.Button", lambda *a, **k: MagicMock())
+
+    class DummyCombobox:
+        def __init__(self, *a, **k):
+            self.bindings = {}
+
+        def pack(self, *a, **k):
+            pass
+
+        def bind(self, seq, func):
+            self.bindings[seq] = func
+
+    monkeypatch.setattr("baseFramework.ttk.Combobox", DummyCombobox)
+    monkeypatch.setattr("baseFramework.tk.Entry", lambda *a, **k: MagicMock())
+    monkeypatch.setattr("baseFramework.tk.Scale", lambda *a, **k: MagicMock())
+
+    app.add_filter_block("Sector")
+
+    # Block should be added to the snap order without raising errors
+    assert len(app.snap_order) == 1
