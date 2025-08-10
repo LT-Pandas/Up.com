@@ -190,6 +190,9 @@ class StockScreenerApp:
         self.snap_order = []
         self.result_tiles = {}  # Needed for render_stock_tile and cleanup
         self.saved_algorithms = {}
+        # Track preview widgets for each saved algorithm so they can be
+        # updated or removed later.
+        self.algorithm_previews = {}
         self.backend = StockDataService(self.api_key, self.base_url, self.quote_url)
 
         self.setup_layout()
@@ -320,7 +323,16 @@ class StockScreenerApp:
             font=("Arial", 10, "bold"),
             command=self.open_save_algorithm_dialog
         )
-        algo_btn.pack(padx=10, pady=(5, 15), fill="x")
+        algo_btn.pack(padx=10, pady=(5, 5), fill="x")
+
+        del_btn = tk.Button(
+            self.block_scroll,
+            text="− Delete Algorithm",
+            bg="#f8d7da", fg="#721c24",
+            font=("Arial", 10, "bold"),
+            command=self.open_delete_algorithm_dialog
+        )
+        del_btn.pack(padx=10, pady=(0, 15), fill="x")
 
         self.algo_header = tk.Label(
             self.block_scroll,
@@ -526,6 +538,7 @@ class StockScreenerApp:
                 default = value if value is not None else (options[0] if options else "")
                 combo = ttk.Combobox(dropdown_row, values=[str(o) for o in options], font=("Arial", 10), state="readonly")
                 combo.set(str(default))
+
                 combo.pack(side="left", fill="x", expand=True)
 
                 if default != "":
@@ -817,11 +830,52 @@ class StockScreenerApp:
             name = name_entry.get().strip()
             if not name:
                 return
-            self.saved_algorithms[name] = dict(self.params)
-            self._add_algorithm_preview(name)
+            self.save_algorithm(name)
             top.destroy()
 
         tk.Button(top, text="Save", command=submit).pack(pady=10)
+
+    def save_algorithm(self, name: str):
+        """Save the current parameters under ``name``.
+
+        If an algorithm with the same name already exists it will be
+        replaced, allowing users to update previous saves without creating
+        duplicates.
+        """
+        self.saved_algorithms[name] = dict(self.params)
+        if name not in self.algorithm_previews:
+            self._add_algorithm_preview(name)
+
+    def delete_algorithm(self, name: str):
+        """Delete a previously saved algorithm."""
+        self.saved_algorithms.pop(name, None)
+        frame = self.algorithm_previews.pop(name, None)
+        if frame:
+            frame.destroy()
+
+    def open_delete_algorithm_dialog(self):
+        if not self.saved_algorithms:
+            messagebox.showinfo("Delete Algorithm", "No saved algorithms to delete.")
+            return
+
+        top = Toplevel(self.root)
+        top.title("Delete Algorithm")
+        top.geometry("300x200")
+
+        listbox = tk.Listbox(top)
+        for name in self.saved_algorithms:
+            listbox.insert(tk.END, name)
+        listbox.pack(padx=10, pady=10, fill="both", expand=True)
+
+        def delete_selected():
+            selection = listbox.curselection()
+            if not selection:
+                return
+            name = listbox.get(selection[0])
+            self.delete_algorithm(name)
+            top.destroy()
+
+        tk.Button(top, text="Delete", command=delete_selected).pack(pady=5)
 
     def _add_algorithm_preview(self, name):
         frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
@@ -831,6 +885,7 @@ class StockScreenerApp:
         frame._param_label = name
         DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
         frame.pack(pady=4)
+        self.algorithm_previews[name] = frame
 
     def load_algorithm(self, name):
         params = self.saved_algorithms.get(name)
@@ -981,13 +1036,21 @@ class StockScreenerApp:
         toggle_btn = tk.Button(bottom_row, text="▼", font=("Arial", 10), bg="white", relief="flat")
         toggle_btn.pack(side="right")
         toggle_btn.config(command=lambda b=toggle_btn: toggle_dropdown(b))
-        # Allow clicking anywhere on the stock tile to toggle the dropdown,
-        # excluding the remove and toggle buttons to avoid accidental double toggles
+
+        # Allow clicking anywhere on the stock tile (including its child widgets)
+        # to toggle the dropdown.  Bind recursively so clicks on labels or other
+        # widgets also trigger the handler, while skipping the remove and toggle
+        # buttons to prevent duplicate toggles.
         def on_tile_click(event, btn=toggle_btn):
             if event.widget not in (btn, remove_btn):
                 toggle_dropdown(btn)
 
-        frame.bind("<Button-1>", on_tile_click)
+        def bind_widget_tree(widget):
+            widget.bind("<Button-1>", on_tile_click, add="+")
+            for child in widget.winfo_children():
+                bind_widget_tree(child)
+
+        bind_widget_tree(frame)
     
     def remove_stock_tile(self, symbol):
         frame = self.result_tiles.pop(symbol, None)
