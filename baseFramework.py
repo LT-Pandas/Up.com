@@ -190,6 +190,9 @@ class StockScreenerApp:
         self.snap_order = []
         self.result_tiles = {}  # Needed for render_stock_tile and cleanup
         self.saved_algorithms = {}
+        # Track preview widgets for each saved algorithm so they can be
+        # updated or removed later.
+        self.algorithm_previews = {}
         self.backend = StockDataService(self.api_key, self.base_url, self.quote_url)
 
         self.setup_layout()
@@ -302,7 +305,16 @@ class StockScreenerApp:
             font=("Arial", 10, "bold"),
             command=self.open_save_algorithm_dialog
         )
-        algo_btn.pack(padx=10, pady=(5, 15), fill="x")
+        algo_btn.pack(padx=10, pady=(5, 5), fill="x")
+
+        del_btn = tk.Button(
+            self.block_scroll,
+            text="− Delete Algorithm",
+            bg="#f8d7da", fg="#721c24",
+            font=("Arial", 10, "bold"),
+            command=self.open_delete_algorithm_dialog
+        )
+        del_btn.pack(padx=10, pady=(0, 15), fill="x")
 
         self.algo_header = tk.Label(
             self.block_scroll,
@@ -687,11 +699,52 @@ class StockScreenerApp:
             name = name_entry.get().strip()
             if not name:
                 return
-            self.saved_algorithms[name] = dict(self.params)
-            self._add_algorithm_preview(name)
+            self.save_algorithm(name)
             top.destroy()
 
         tk.Button(top, text="Save", command=submit).pack(pady=10)
+
+    def save_algorithm(self, name: str):
+        """Save the current parameters under ``name``.
+
+        If an algorithm with the same name already exists it will be
+        replaced, allowing users to update previous saves without creating
+        duplicates.
+        """
+        self.saved_algorithms[name] = dict(self.params)
+        if name not in self.algorithm_previews:
+            self._add_algorithm_preview(name)
+
+    def delete_algorithm(self, name: str):
+        """Delete a previously saved algorithm."""
+        self.saved_algorithms.pop(name, None)
+        frame = self.algorithm_previews.pop(name, None)
+        if frame:
+            frame.destroy()
+
+    def open_delete_algorithm_dialog(self):
+        if not self.saved_algorithms:
+            messagebox.showinfo("Delete Algorithm", "No saved algorithms to delete.")
+            return
+
+        top = Toplevel(self.root)
+        top.title("Delete Algorithm")
+        top.geometry("300x200")
+
+        listbox = tk.Listbox(top)
+        for name in self.saved_algorithms:
+            listbox.insert(tk.END, name)
+        listbox.pack(padx=10, pady=10, fill="both", expand=True)
+
+        def delete_selected():
+            selection = listbox.curselection()
+            if not selection:
+                return
+            name = listbox.get(selection[0])
+            self.delete_algorithm(name)
+            top.destroy()
+
+        tk.Button(top, text="Delete", command=delete_selected).pack(pady=5)
 
     def _add_algorithm_preview(self, name):
         frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
@@ -701,6 +754,7 @@ class StockScreenerApp:
         frame._param_label = name
         DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
         frame.pack(pady=4)
+        self.algorithm_previews[name] = frame
 
     def load_algorithm(self, name):
         params = self.saved_algorithms.get(name)
