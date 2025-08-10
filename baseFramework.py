@@ -571,6 +571,9 @@ class StockScreenerApp:
             header_frame.bind("<Button-1>", on_header_click)
             header_label.bind("<Button-1>", on_header_click)
 
+        # Give the preview list a bit of breathing room at the bottom
+        tk.Frame(self.block_scroll, bg="#f0f0f0", height=5).pack(fill="x", pady=(0, 10))
+
     def _on_results_mousewheel(self, event):
         self.results_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
