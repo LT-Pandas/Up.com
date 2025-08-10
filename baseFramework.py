@@ -420,12 +420,20 @@ class StockScreenerApp:
                     drop_target=self.block_area
                 )
 
-            def toggle_group(btn=toggle_btn, frame=group_frame):
+            def toggle_group(btn=toggle_btn, frame=group_frame, header=header_frame):
+                """Show or hide the group's preview blocks.
+
+                When re-displaying a previously hidden group, ensure the
+                container is packed *after* its header so the blocks appear
+                directly beneath the correct title instead of collecting at
+                the end of the filter list."""
+
                 if frame.winfo_ismapped():
                     frame.pack_forget()
                     btn.config(text="▼")
                 else:
-                    frame.pack(fill="x", padx=10)
+                    # Re-pack the frame after its header to preserve layout
+                    frame.pack(fill="x", padx=10, after=header)
                     btn.config(text="▲")
 
             toggle_btn.config(command=toggle_group)
