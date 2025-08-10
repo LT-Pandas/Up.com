@@ -93,6 +93,7 @@ class ToolTip:
         if self.tipwindow or not self.text:
             return
         ToolTip._active_tip = self
+
         self.tipwindow = tw = tk.Toplevel(self.widget)
         tw.overrideredirect(True)
         tw.attributes("-topmost", True)
