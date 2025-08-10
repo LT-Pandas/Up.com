@@ -74,6 +74,11 @@ def calculate_intraday_change(price, previous_close) -> tuple[float, float]:
 
 
 class ToolTip:
+    """Lightweight tooltip that follows the cursor."""
+
+    # Track the currently displayed tooltip so only one is visible at a time
+    _active_tip = None
+
     def __init__(self, widget, text: str):
         self.widget = widget
         self.text = text
@@ -83,9 +88,12 @@ class ToolTip:
         widget.bind("<Motion>", self.move)
 
     def show(self, event=None):
+        if ToolTip._active_tip and ToolTip._active_tip is not self:
+            ToolTip._active_tip.hide()
         if self.tipwindow or not self.text:
             return
-          
+        ToolTip._active_tip = self
+
         self.tipwindow = tw = tk.Toplevel(self.widget)
         tw.overrideredirect(True)
         tw.attributes("-topmost", True)
@@ -109,17 +117,39 @@ class ToolTip:
         y = (event.y_root if event else self.widget.winfo_pointery()) + 12
         self.tipwindow.geometry(f"+{x}+{y}")
 
-
     def hide(self, event=None):
-        if self.tipwindow:
-            self.tipwindow.destroy()
-            self.tipwindow = None
+        if not self.tipwindow:
+            return
+        # Only hide if the cursor is truly outside the widget hierarchy
+        x, y = self.widget.winfo_pointerx(), self.widget.winfo_pointery()
+        target = self.widget.winfo_containing(x, y)
+        if target and self._is_descendant(target):
+            return
+        self.tipwindow.destroy()
+        self.tipwindow = None
+        if ToolTip._active_tip is self:
+            ToolTip._active_tip = None
+
+    def _is_descendant(self, target):
+        while target:
+            if target is self.widget:
+                return True
+            target = target.master
+        return False
 
 
 def add_tooltip(widget, text: str):
-    ToolTip(widget, text)
-    for child in widget.winfo_children():
-        add_tooltip(child, text)
+    """Attach a single tooltip to *widget* and all of its children."""
+    tooltip = ToolTip(widget, text)
+
+    def bind_children(w):
+        for child in w.winfo_children():
+            child.bind("<Enter>", tooltip.show, add="+")
+            child.bind("<Leave>", tooltip.hide, add="+")
+            child.bind("<Motion>", tooltip.move, add="+")
+            bind_children(child)
+
+    bind_children(widget)
 
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
