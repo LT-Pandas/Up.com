@@ -302,6 +302,30 @@ def test_remove_filter_block_delays_results_not_removal():
     app.delayed_search.assert_called_once_with(delay_ms=500)
 
 
+def test_remove_filter_block_without_param_does_not_search():
+    """If a block had no input, removing it should not trigger a search."""
+    app = StockScreenerApp.__new__(StockScreenerApp)
+
+    destroyed = []
+
+    class DummyFrame:
+        def destroy(self):
+            destroyed.append(True)
+
+    frame = DummyFrame()
+    app.params = {}
+    app.snap_order = [(1, frame)]
+    app.snap_zone_placeholder = MagicMock()
+    app.reposition_snap_zone = MagicMock()
+    app.delayed_search = MagicMock()
+
+    app.remove_filter_block(frame, "k")
+
+    assert destroyed == [True]
+    assert app.snap_order == []
+    app.delayed_search.assert_not_called()
+
+
 def test_dropdown_filter_block_adds_without_error(monkeypatch):
     app = StockScreenerApp.__new__(StockScreenerApp)
     app.params = {}

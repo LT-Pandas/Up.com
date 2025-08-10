@@ -1028,7 +1028,8 @@ class StockScreenerApp:
 
         frame.destroy()
 
-        if key in self.params:
+        had_param = key in self.params
+        if had_param:
             del self.params[key]
 
         self.snap_order = [(item_id, f) for item_id, f in self.snap_order if f != frame]
@@ -1038,8 +1039,10 @@ class StockScreenerApp:
 
         self.reposition_snap_zone()
 
-        # Delay updating the results so the UI has time to settle
-        self.delayed_search(delay_ms=500)
+        # Only update results if removing the block actually changed params
+        if had_param:
+            # Delay updating the results so the UI has time to settle
+            self.delayed_search(delay_ms=500)
 
     def clear_workspace(self):
         """Remove all filter blocks and reset parameters."""
