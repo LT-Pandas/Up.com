@@ -288,14 +288,32 @@ class StockScreenerApp:
             ("Lower Volume", lambda: self.set_parameter("volumeMoreThan", float)),
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Lower Dividend", lambda: self.set_parameter("dividendMoreThan", float, 0.0)),
-            ("Limit Results", lambda: self.set_parameter("limit", int))
+            ("Limit Results", lambda: self.set_parameter("limit", int)),
+            # MVP Filters
+            ("Revenue (TTM) ≥", lambda: self.set_parameter("rev_ttm_min", float)),
+            ("YoY Revenue Growth ≥ (%)", lambda: self.set_parameter("yoy_rev_growth_pct_min", float)),
+            ("YoY Growth Count (≥ last 4q)", lambda: self.set_parameter("yoy_growth_quarter_count_min", float)),
+            ("Max QoQ Revenue Declines (last 4q)", lambda: self.set_parameter("max_qoq_rev_declines_last4", float)),
+            ("Gross Margin % ≥", lambda: self.set_parameter("gross_margin_pct_min", float)),
+            ("Δ Gross Margin YoY (pp) ≥", lambda: self.set_parameter("delta_gm_pp_yoy_min", float)),
+            ("Opex % Slope (last 4q) ≤", lambda: self.set_parameter("opex_pct_slope_last4_max", float)),
+            ("Operating CF (TTM) ≥", lambda: self.set_parameter("ocf_ttm_min", float)),
+            ("Δ Operating CF TTM YoY ≥", lambda: self.set_parameter("delta_ocf_ttm_yoy_min", float)),
+            ("R&D % of Revenue ≤", lambda: self.set_parameter("rd_pct_max", float)),
+            ("Δ R&D % YoY (pp) ≤", lambda: self.set_parameter("delta_rd_pct_pp_yoy_max", float)),
+            ("R&D Growth ≤ Revenue Growth (YoY)", lambda: self.open_dropdown("rd_growth_lte_rev_growth", FILTER_OPTIONS["rd_growth_lte_rev_growth"])),
+            ("Deferred Revenue Rising (YoY)", lambda: self.open_dropdown("deferred_rev_yoy_increase", FILTER_OPTIONS["deferred_rev_yoy_increase"])),
+            ("Cash Conversion Cycle Slope (last 4q) ≤", lambda: self.set_parameter("ccc_slope_last4_max", float)),
+            ("Rule of 40 (Growth + Op Margin) ≥", lambda: self.set_parameter("rule40_op_ttm_min", float)),
+            ("Capex % of Revenue ≤", lambda: self.set_parameter("capex_pct_max", float)),
         ]
 
         categories = {
             "Tools": [],
             "Drop Down Filters": [],
             "Write in Filters": [],
-            "Numeric Filters": []
+            "Numeric Filters": [],
+            "MVP Filters": [],
         }
 
         algo_btn = tk.Button(
@@ -329,6 +347,25 @@ class StockScreenerApp:
         self.algo_container = tk.Frame(self.block_scroll, bg="#f0f0f0")
         self.algo_container.pack(fill="x", padx=10)
 
+        mvp_keys = {
+            "rev_ttm_min",
+            "yoy_rev_growth_pct_min",
+            "yoy_growth_quarter_count_min",
+            "max_qoq_rev_declines_last4",
+            "gross_margin_pct_min",
+            "delta_gm_pp_yoy_min",
+            "opex_pct_slope_last4_max",
+            "ocf_ttm_min",
+            "delta_ocf_ttm_yoy_min",
+            "rd_pct_max",
+            "delta_rd_pct_pp_yoy_max",
+            "rd_growth_lte_rev_growth",
+            "deferred_rev_yoy_increase",
+            "ccc_slope_last4_max",
+            "rule40_op_ttm_min",
+            "capex_pct_max",
+        }
+
         for label, callback in filters:
             param_key = self.get_param_key_from_label(label)
             if param_key in ["stockSearch", "limit"]:
@@ -337,12 +374,14 @@ class StockScreenerApp:
                 categories["Drop Down Filters"].append((label, callback))
             elif param_key in ["marketCapMoreThan", "marketCapLowerThan"]:
                 categories["Write in Filters"].append((label, callback))
+            elif param_key in mvp_keys:
+                categories["MVP Filters"].append((label, callback))
             else:
                 categories["Numeric Filters"].append((label, callback))
 
 
 
-        for cat in ["Tools", "Drop Down Filters", "Write in Filters", "Numeric Filters"]:
+        for cat in ["Tools", "Drop Down Filters", "Write in Filters", "Numeric Filters", "MVP Filters"]:
             group = categories[cat]
             header = tk.Label(
                 self.block_scroll,
@@ -497,8 +536,9 @@ class StockScreenerApp:
                 dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
 
                 default = value if value is not None else (options[0] if options else "")
-                combo = ttk.Combobox(dropdown_row, values=options, font=("Arial", 10), state="readonly")
-                combo.set(default)
+                combo = ttk.Combobox(dropdown_row, values=[str(o) for o in options], font=("Arial", 10), state="readonly")
+                combo.set(str(default))
+
                 combo.pack(side="left", fill="x", expand=True)
 
                 if default != "":
@@ -507,7 +547,11 @@ class StockScreenerApp:
                 def update_selection(event):
                     selected = combo.get()
                     if selected:
-                        self.params[key] = selected
+                        try:
+                            idx = combo.current()
+                            self.params[key] = options[idx]
+                        except Exception:
+                            self.params[key] = selected
                     else:
                         self.params.pop(key, None)
                     self.delayed_search()  # use this instead of update_display()
