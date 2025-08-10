@@ -845,6 +845,12 @@ class StockScreenerApp:
 
         self.reposition_snap_zone()
 
+        # Trigger a delayed search so results update shortly after
+        # a block is removed.  The delay gives the UI time to settle
+        # and prevents rapid successive updates when multiple blocks
+        # are removed in quick succession.
+        self.delayed_search(1000)
+
     def open_save_algorithm_dialog(self):
         if not self.params:
             messagebox.showinfo("Save Algorithm", "Add filters to the workspace first.")
