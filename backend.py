@@ -7,7 +7,7 @@ except Exception:  # pragma: no cover - optional dependency for tests
 
     requests = _RequestsStub()
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 
 
@@ -245,6 +245,27 @@ class StockDataService:
     def search(self, params: dict) -> list:
         """Return a list of search results based on provided parameters."""
         params = dict(params)
+        if "ipoDays" in params:
+            try:
+                days = int(params.get("ipoDays", 0))
+            except Exception:
+                days = 0
+            start = datetime.utcnow().date()
+            end = start + timedelta(days=days)
+            url = (
+                f"{self.base_url}from={start:%Y-%m-%d}&to={end:%Y-%m-%d}&apikey={self.api_key}"
+            )
+            response = requests.get(url)
+            data = response.json()
+            return [
+                {
+                    "symbol": item.get("symbol"),
+                    "name": item.get("company"),
+                    "ipoDate": item.get("ipoDate"),
+                }
+                for item in data
+            ]
+
         params.setdefault("isActivelyTrading", True)
 
         mvp_keys = {
