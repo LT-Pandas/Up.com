@@ -85,6 +85,7 @@ class ToolTip:
     def show(self, event=None):
         if self.tipwindow or not self.text:
             return
+          
         self.tipwindow = tw = tk.Toplevel(self.widget)
         tw.overrideredirect(True)
         tw.attributes("-topmost", True)
@@ -107,6 +108,7 @@ class ToolTip:
         x = (event.x_root if event else self.widget.winfo_pointerx()) + 12
         y = (event.y_root if event else self.widget.winfo_pointery()) + 12
         self.tipwindow.geometry(f"+{x}+{y}")
+
 
     def hide(self, event=None):
         if self.tipwindow:
