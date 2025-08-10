@@ -1003,9 +1003,10 @@ class StockScreenerApp:
             self.current_algorithm = None
             self.clear_workspace()
 
-    def open_delete_algorithm_dialog(self):
-        if not self.saved_algorithms:
-            messagebox.showinfo("Delete Algorithm", "No saved algorithms to delete.")
+    def update_current_algorithm(self):
+        """Update the currently loaded algorithm with current parameters."""
+        if not self.current_algorithm:
+            messagebox.showinfo("Update Algorithm", "No algorithm loaded to update.")
             return
         self.save_algorithm(self.current_algorithm)
 
@@ -1019,6 +1020,7 @@ class StockScreenerApp:
         frame._param_label = name
         DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
 
+        # Add delete "x" button on the far left
         btn = tk.Button(
             frame,
             text="✖",
@@ -1029,8 +1031,7 @@ class StockScreenerApp:
             command=lambda n=name: self.delete_algorithm(n),
         )
         btn.place(x=2, rely=0.5, anchor="w")
-        btn.lift()
-
+        btn.lift()  # ensure the button sits above the label
 
         frame.pack(pady=4)
         self.algorithm_previews[name] = frame
@@ -1040,6 +1041,7 @@ class StockScreenerApp:
         if not params:
             return
 
+        # Clear existing workspace
         self.clear_workspace()
 
         for key, value in params.items():
