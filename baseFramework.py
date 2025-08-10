@@ -393,13 +393,24 @@ class StockScreenerApp:
         title_row.pack(fill="x", pady=(5, 0), padx=8)
         tk.Label(title_row, text=label, font=("Arial", 10, "bold"), bg="white").pack(side="left")
 
-        if base_key in FILTER_OPTIONS and FILTER_OPTIONS[base_key] is not None:
-            dropdown_row = tk.Frame(frame, bg="white")
-            dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
+        if base_key in FILTER_OPTIONS:
             options = FILTER_OPTIONS[base_key]
-            combo = ttk.Combobox(dropdown_row, values=options, font=("Arial", 10), state="disabled")
-            combo.set('') #combo.set(options[0])
-            combo.pack(side="left", fill="x", expand=True)
+            if isinstance(options, list):
+                dropdown_row = tk.Frame(frame, bg="white")
+                dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
+                combo = ttk.Combobox(dropdown_row, values=options, font=("Arial", 10), state="disabled")
+                combo.set('')
+                combo.pack(side="left", fill="x", expand=True)
+            elif isinstance(options, dict):
+                slider_row = tk.Frame(frame, bg="white")
+                slider_row.pack(fill="x", padx=10, pady=(2, 10))
+                val_entry = tk.Entry(slider_row, width=6, justify="center", relief="groove", font=("Arial", 10), state="disabled")
+                val_entry.insert(0, str(options.get('default', '')))
+                val_entry.pack(side="left", padx=(0, 10))
+                from_, to_, resolution = options.get('from', 0), options.get('to', 100), options.get('resolution', 1)
+                slider = tk.Scale(slider_row, from_=from_, to=to_, orient="horizontal", resolution=resolution, length=200, state="disabled")
+                slider.set(options.get('default', from_))
+                slider.pack(side="left", fill="x", expand=True)
 
         elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "limit", "dividend"]):
             if "marketcap" in base_key.lower():
@@ -479,25 +490,101 @@ class StockScreenerApp:
         )
         remove_button.pack(side="right")
 
-        if base_key in FILTER_OPTIONS and FILTER_OPTIONS[base_key] is not None:
-            dropdown_row = tk.Frame(block_frame, bg="white")
-            dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
+        if base_key in FILTER_OPTIONS:
+            options = FILTER_OPTIONS[base_key]
+            if isinstance(options, list):
+                dropdown_row = tk.Frame(block_frame, bg="white")
+                dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
 
-            combo = ttk.Combobox(dropdown_row, values=FILTER_OPTIONS[base_key], font=("Arial", 10), state="readonly")
-            combo.set(value if value is not None else "")
-            combo.pack(side="left", fill="x", expand=True)
+                default = value if value is not None else (options[0] if options else "")
+                combo = ttk.Combobox(dropdown_row, values=options, font=("Arial", 10), state="readonly")
+                combo.set(default)
+                combo.pack(side="left", fill="x", expand=True)
 
-            def update_selection(event):
-                selected = combo.get()
-                if selected:
-                    self.params[key] = selected
-                else:
-                    self.params.pop(key, None)
-                self.delayed_search()  # use this instead of update_display()
+                if default != "":
+                    self.params[key] = default
 
-            combo.bind("<<ComboboxSelected>>", update_selection)
-            if value is not None:
-                self.params[key] = value
+                def update_selection(event):
+                    selected = combo.get()
+                    if selected:
+                        self.params[key] = selected
+                    else:
+                        self.params.pop(key, None)
+                    self.delayed_search()  # use this instead of update_display()
+
+                combo.bind("<<ComboboxSelected>>", update_selection)
+            elif isinstance(options, dict):
+                val_var = tk.StringVar(value="")
+                slider_row = tk.Frame(block_frame, bg="white")
+                slider_row.pack(fill="x", padx=10, pady=(2, 10))
+
+                val_entry = tk.Entry(
+                    slider_row,
+                    textvariable=val_var,
+                    width=6,
+                    justify="center",
+                    relief="groove",
+                    font=("Arial", 10),
+                )
+                val_entry.pack(side="left", padx=(0, 10))
+
+                from_, to_, resolution = options.get('from', 0), options.get('to', 100), options.get('resolution', 1)
+                default = value if value is not None else options.get('default', from_)
+
+                slider = tk.Scale(
+                    slider_row,
+                    from_=from_,
+                    to=to_,
+                    orient="horizontal",
+                    resolution=resolution,
+                    length=200,
+                )
+                slider.pack(side="left", fill="x", expand=True)
+
+                value_label = tk.Label(slider_row, text="", font=("Arial", 9), bg="white")
+                value_label.place(in_=slider, relx=0, y=-8, anchor="s")
+
+                def update_value_display(val):
+                    try:
+                        numeric = float(val)
+                    except ValueError:
+                        numeric = 0
+                    formatted = f"{numeric:,.2f}"
+                    value_label.config(text=formatted)
+                    ratio = (numeric - from_) / (to_ - from_)
+                    ratio = max(0, min(1, ratio))
+                    value_label.place(in_=slider, relx=ratio, y=-8, anchor="s")
+
+                def on_slider_move(val):
+                    val_var.set(f"{float(val):,.2f}")
+                    update_value_display(val)
+
+                def on_slider_release(event):
+                    try:
+                        val = float(slider.get())
+                        update_value_display(val)
+                        self.params[key] = val
+                        self.update_display()
+                    except ValueError:
+                        self.params.pop(key, None)
+
+                def on_entry_return(event):
+                    try:
+                        val = float(val_var.get().replace(',', ''))
+                        slider.set(val)
+                        self.params[key] = val
+                        self.update_display()
+                    except ValueError:
+                        self.params.pop(key, None)
+
+                slider.config(command=on_slider_move)
+                slider.bind("<ButtonRelease-1>", on_slider_release)
+                val_entry.bind("<Return>", on_entry_return)
+
+                slider.set(default)
+                val_var.set(f"{float(default):,.2f}")
+                update_value_display(default)
+                self.params[key] = default
 
         elif base_key == "stockSearch":
             search_row = tk.Frame(block_frame, bg="white")
