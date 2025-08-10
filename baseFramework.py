@@ -385,19 +385,33 @@ class StockScreenerApp:
 
         for cat in ["Tools", "Drop Down Filters", "Write in Filters", "Numeric Filters", "MVP Filters"]:
             group = categories[cat]
-            header = tk.Label(
-                self.block_scroll,
+
+            header_frame = tk.Frame(self.block_scroll, bg="#d0d0d0")
+            header_frame.pack(fill="x", padx=10, pady=(10, 2))
+
+            header_label = tk.Label(
+                header_frame,
                 text=cat,
                 bg="#d0d0d0",
                 font=("Arial", 10, "bold"),
-                anchor="w",
-                width=37
+                anchor="w"
             )
-            header.pack(padx=10, pady=(10, 2))
+            header_label.pack(side="left", fill="x", expand=True)
+
+            toggle_btn = tk.Button(
+                header_frame,
+                text="▲",
+                bg="#d0d0d0",
+                relief="flat"
+            )
+            toggle_btn.pack(side="right")
+
+            group_frame = tk.Frame(self.block_scroll, bg="#f0f0f0")
+            group_frame.pack(fill="x", padx=10)
 
             for label, callback in group:
-                preview_block = self.create_filter_preview_block(label, self.block_scroll)
-                preview_block.pack(pady=3, padx=10)
+                preview_block = self.create_filter_preview_block(label, group_frame)
+                preview_block.pack(pady=3)
 
                 DraggableBlock(
                     master=self.left_frame,
@@ -405,6 +419,30 @@ class StockScreenerApp:
                     app=self,
                     drop_target=self.block_area
                 )
+
+            def toggle_group(btn=toggle_btn, frame=group_frame, header=header_frame):
+                """Show or hide the group's preview blocks.
+
+                When re-displaying a previously hidden group, ensure the
+                container is packed *after* its header so the blocks appear
+                directly beneath the correct title instead of collecting at
+                the end of the filter list."""
+                if frame.winfo_ismapped():
+                    frame.pack_forget()
+                    btn.config(text="▼")
+                else:
+                    # Re-pack the frame after its header to preserve layout
+                    frame.pack(fill="x", padx=10, after=header)
+                    btn.config(text="▲")
+
+            toggle_btn.config(command=toggle_group)
+
+            def on_header_click(event, btn=toggle_btn):
+                if event.widget is not btn:
+                    toggle_group()
+
+            header_frame.bind("<Button-1>", on_header_click)
+            header_label.bind("<Button-1>", on_header_click)
 
     def _on_results_mousewheel(self, event):
         self.results_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
