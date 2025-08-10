@@ -319,6 +319,8 @@ class StockScreenerApp:
         # Name of the algorithm currently loaded in the editor, if any
         self.current_algorithm = None
         self.backend = StockDataService(self.api_key, self.base_url, self.quote_url)
+        # Track whether the UI is in dark mode
+        self.dark_mode = False
         # Ensure tooltips vanish if the window loses focus or is minimized
         self.root.bind("<FocusOut>", ToolTip.hide_active)
         self.root.bind("<Unmap>", ToolTip.hide_active)
@@ -574,8 +576,55 @@ class StockScreenerApp:
         # Give the preview list a bit of breathing room at the bottom
         tk.Frame(self.block_scroll, bg="#f0f0f0", height=5).pack(fill="x", pady=(0, 10))
 
+        # Add a toggle button to switch between light and dark themes
+        self.theme_btn = tk.Button(
+            self.root,
+            text="Dark Mode",
+            command=self.toggle_dark_mode,
+        )
+        # Place button at the top-right corner of the window
+        self.theme_btn.place(relx=1.0, rely=0.0, anchor="ne")
+
     def _on_results_mousewheel(self, event):
         self.results_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def toggle_dark_mode(self):
+        """Toggle between light and dark UI themes."""
+        self.dark_mode = not getattr(self, "dark_mode", False)
+
+        if self.dark_mode:
+            bg_main = "#2e2e2e"
+            fg = "#ffffff"
+            canvas_bg = "#2b2b2b"
+        else:
+            bg_main = "#f0f0f0"
+            fg = "black"
+            canvas_bg = "#f0f8ff"
+
+        mapping = [
+            (self.root, bg_main),
+            (self.left_frame, bg_main),
+            (self.block_area, bg_main),
+            (self.snap_zone, canvas_bg),
+            (self.snap_zone_placeholder, canvas_bg),
+            (self.results_container, bg_main),
+            (self.results_canvas, bg_main),
+            (self.results_frame, bg_main),
+        ]
+
+        for widget, color in mapping:
+            try:
+                widget.configure(bg=color)
+            except Exception:
+                pass
+
+        try:
+            self.snap_zone_placeholder.configure(fg=fg)
+        except Exception:
+            pass
+
+        if hasattr(self, "theme_btn"):
+            self.theme_btn.config(text="Light Mode" if self.dark_mode else "Dark Mode")
 
 
     def get_param_key_from_label(self, label):

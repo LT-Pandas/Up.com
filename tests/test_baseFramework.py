@@ -371,3 +371,26 @@ def test_dropdown_filter_block_adds_without_error(monkeypatch):
 
     # Block should be added to the snap order without raising errors
     assert len(app.snap_order) == 1
+
+
+def test_toggle_dark_mode_switches_flag_and_updates_widgets():
+    app = StockScreenerApp.__new__(StockScreenerApp)
+
+    # Mock all widgets that are touched by the toggle
+    app.root = MagicMock()
+    app.left_frame = MagicMock()
+    app.block_area = MagicMock()
+    app.snap_zone = MagicMock()
+    app.snap_zone_placeholder = MagicMock()
+    app.results_container = MagicMock()
+    app.results_canvas = MagicMock()
+    app.results_frame = MagicMock()
+    app.dark_mode = False
+
+    app.toggle_dark_mode()
+    assert app.dark_mode is True
+    assert app.root.configure.called
+
+    app.toggle_dark_mode()
+    assert app.dark_mode is False
+    assert app.root.configure.call_count == 2
