@@ -80,19 +80,19 @@ class ToolTip:
         self.tipwindow = None
         widget.bind("<Enter>", self.show)
         widget.bind("<Leave>", self.hide)
+        widget.bind("<Motion>", self.move)
 
     def show(self, event=None):
         if self.tipwindow or not self.text:
             return
-        x = self.widget.winfo_rootx() + 20
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 10
+          
         self.tipwindow = tw = tk.Toplevel(self.widget)
         tw.overrideredirect(True)
         tw.attributes("-topmost", True)
         label = tk.Label(
             tw,
             text=self.text,
-            background="#ffffe0",
+            background="#89CFF0",
             relief="solid",
             borderwidth=1,
             font=("Arial", 9),
@@ -100,7 +100,15 @@ class ToolTip:
             wraplength=250,
         )
         label.pack(ipadx=2)
-        tw.geometry(f"+{x}+{y}")
+        self.move(event)
+
+    def move(self, event):
+        if not self.tipwindow:
+            return
+        x = (event.x_root if event else self.widget.winfo_pointerx()) + 12
+        y = (event.y_root if event else self.widget.winfo_pointery()) + 12
+        self.tipwindow.geometry(f"+{x}+{y}")
+
 
     def hide(self, event=None):
         if self.tipwindow:
