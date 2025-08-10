@@ -80,6 +80,10 @@ def test_save_and_delete_algorithm_clears_workspace():
     assert app.current_algorithm == "Test"
 
     app.params = {"a": 2}
+    app.update_current_algorithm("Test")
+    assert app.saved_algorithms["Test"] == {"a": 2}
+    assert added == ["Test"]  # no duplicate preview added
+
     app.snap_order = [(1, DummyFrame("block"))]
     app.snap_zone_placeholder = DummyPlaceholder()
     app.reposition_snap_zone = lambda: None

@@ -1006,12 +1006,44 @@ class StockScreenerApp:
             self.current_algorithm = None
             self.clear_workspace()
 
-    def update_current_algorithm(self):
-        """Update the currently loaded algorithm with current parameters."""
+    def update_current_algorithm(self, name: str | None = None):
+        """Update the currently loaded algorithm with current parameters.
+
+        If ``name`` is provided the algorithm is saved directly under that
+        name.  Otherwise a dialog is shown allowing the user to confirm or
+        change the current algorithm's name.  The existing name is pre-filled
+        and hitting ``Enter`` submits the form so users can quickly update
+        without additional clicks.
+        """
         if not self.current_algorithm:
             messagebox.showinfo("Update Algorithm", "No algorithm loaded to update.")
             return
-        self.save_algorithm(self.current_algorithm)
+
+        if name is not None:
+            self.save_algorithm(name)
+            return
+
+        top = Toplevel(self.root)
+        top.title("Update Algorithm")
+        top.geometry("300x120")
+
+        tk.Label(top, text="Algorithm Name:").pack(pady=(10, 0), padx=10, anchor="w")
+        name_entry = tk.Entry(top)
+        name_entry.pack(padx=10, fill="x")
+        name_entry.insert(0, self.current_algorithm)
+        name_entry.focus()
+        name_entry.select_range(0, tk.END)
+
+        def submit(event=None):
+            new_name = name_entry.get().strip()
+            if not new_name:
+                return
+            self.save_algorithm(new_name)
+            top.destroy()
+
+        tk.Button(top, text="Save", command=submit).pack(pady=10)
+        name_entry.bind("<Return>", submit)
+        top.bind("<Return>", submit)
 
     def _add_algorithm_preview(self, name):
         frame = tk.Frame(

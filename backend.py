@@ -268,15 +268,28 @@ class StockDataService:
 
         params.setdefault("isActivelyTrading", True)
 
-        ipo_days = params.pop("ipoDays", None)
-        if ipo_days is not None:
+        if "ipoDays" in params:
             try:
-                days = int(ipo_days)
+                days = int(params["ipoDays"])
             except Exception:
-                days = 0
-            today = datetime.utcnow().date()
-            params["from"] = today.strftime("%Y-%m-%d")
-            params["to"] = (today + timedelta(days=days)).strftime("%Y-%m-%d")
+                return []
+            from datetime import timedelta
+
+            start = datetime.utcnow().date()
+            end = start + timedelta(days=days)
+
+            query = (
+                f"from={start:%Y-%m-%d}&to={end:%Y-%m-%d}&"
+                f"isActivelyTrading={str(params.get('isActivelyTrading')).lower()}&"
+                f"limit={params.get('limit', 20)}"
+            )
+            url = f"{self.base_url}{query}&apikey={self.api_key}"
+            response = requests.get(url)
+            data = response.json()
+            for item in data:
+                if "company" in item and "name" not in item:
+                    item["name"] = item["company"]
+            return data
 
         mvp_keys = {
             "rev_ttm_min",
