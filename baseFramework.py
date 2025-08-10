@@ -309,6 +309,10 @@ class StockScreenerApp:
         self.snap_order = []
         self.result_tiles = {}  # Needed for render_stock_tile and cleanup
         self.saved_algorithms = {}
+        # Additional metadata for each saved algorithm.  Each entry stores a
+        # list describing the filter blocks (key, label and value) so the
+        # algorithm can be reconstructed with user-provided inputs.
+        self.saved_algorithm_blocks = {}
         # Track preview widgets for each saved algorithm so they can be
         # updated or removed later.
         self.algorithm_previews = {}
@@ -567,6 +571,9 @@ class StockScreenerApp:
             header_frame.bind("<Button-1>", on_header_click)
             header_label.bind("<Button-1>", on_header_click)
 
+        # Give the preview list a bit of breathing room at the bottom
+        tk.Frame(self.block_scroll, bg="#f0f0f0", height=5).pack(fill="x", pady=(0, 10))
+
     def _on_results_mousewheel(self, event):
         self.results_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
@@ -705,6 +712,7 @@ class StockScreenerApp:
                 options_str = [str(o) for o in options]
                 placeholder = "Select option"
                 values_list = [placeholder] + options_str
+
                 if value is not None:
                     var = tk.StringVar(value=str(value))
                     self.params[key] = value
@@ -734,6 +742,10 @@ class StockScreenerApp:
                         self.params.pop(key, None)
 
                 combo.bind("<<ComboboxSelected>>", update_selection)
+                combo.bind("<Return>", update_selection)
+                combo.bind("<KeyRelease>", on_keyrelease)
+                combo.bind("<FocusIn>", on_focus_in)
+                combo.bind("<FocusOut>", on_focus_out)
             elif isinstance(options, dict):
                 val_var = tk.StringVar(value="")
                 slider_row = tk.Frame(block_frame, bg="white")
@@ -994,6 +1006,8 @@ class StockScreenerApp:
 
 
     def remove_filter_block(self, frame, key):
+        """Remove a filter block immediately but delay search results."""
+
         frame.destroy()
 
         if key in self.params:
@@ -1005,8 +1019,9 @@ class StockScreenerApp:
             self.snap_zone_placeholder.place(relx=0.5, rely=0.5, anchor="center")
 
         self.reposition_snap_zone()
-        # Ensure the preview area and results reflect removal immediately
-        self.update_display()
+
+        # Delay updating the results so the UI has time to settle
+        self.delayed_search(delay_ms=500)
 
     def clear_workspace(self):
         """Remove all filter blocks and reset parameters."""
@@ -1049,7 +1064,34 @@ class StockScreenerApp:
         replaced, allowing users to update previous saves without creating
         duplicates.
         """
+        # ``saved_algorithms`` stores a plain mapping of parameter keys to
+        # their values so the existing unit tests – and any external code –
+        # continue to behave exactly the same.  In addition we persist
+        # per-block metadata such as the original label and value so that the
+        # algorithm can be faithfully reconstructed later (preserving block
+        # order and user inputs).
         self.saved_algorithms[name] = dict(self.params)
+
+        # Lazily create the metadata container to keep backward
+        # compatibility with tests that instantiate the class via ``__new__``
+        # and manually set only a subset of attributes.
+        if not hasattr(self, "saved_algorithm_blocks"):
+            self.saved_algorithm_blocks = {}
+
+        blocks = []
+        for _item_id, frame in getattr(self, "snap_order", []):
+            key = getattr(frame, "_param_key", None)
+            if not key:
+                continue
+            blocks.append(
+                {
+                    "key": key,
+                    "label": self.get_label_from_param_key(key),
+                    "value": self.params.get(key),
+                }
+            )
+        self.saved_algorithm_blocks[name] = blocks
+
         self.current_algorithm = name
         if name not in self.algorithm_previews:
             self._add_algorithm_preview(name)
@@ -1059,6 +1101,8 @@ class StockScreenerApp:
     def delete_algorithm(self, name: str):
         """Delete a previously saved algorithm."""
         self.saved_algorithms.pop(name, None)
+        if hasattr(self, "saved_algorithm_blocks"):
+            self.saved_algorithm_blocks.pop(name, None)
         frame = self.algorithm_previews.pop(name, None)
         if frame:
             # Remove the preview widget so surrounding previews shift up
@@ -1088,6 +1132,8 @@ class StockScreenerApp:
             if new_name != self.current_algorithm:
                 old_name = self.current_algorithm
                 self.saved_algorithms.pop(old_name, None)
+                if hasattr(self, "saved_algorithm_blocks"):
+                    self.saved_algorithm_blocks.pop(old_name, None)
                 frame = self.algorithm_previews.pop(old_name, None)
                 if frame:
                     frame.pack_forget()
@@ -1113,6 +1159,8 @@ class StockScreenerApp:
             if new_name != self.current_algorithm:
                 old_name = self.current_algorithm
                 self.saved_algorithms.pop(old_name, None)
+                if hasattr(self, "saved_algorithm_blocks"):
+                    self.saved_algorithm_blocks.pop(old_name, None)
                 frame = self.algorithm_previews.pop(old_name, None)
                 if frame:
                     frame.pack_forget()
@@ -1150,7 +1198,9 @@ class StockScreenerApp:
         )
         btn.pack(side="right")
 
-        summary = self._format_algorithm_summary(self.saved_algorithms.get(name, {}))
+        metadata = getattr(self, "saved_algorithm_blocks", {}).get(name)
+        source = metadata if metadata is not None else self.saved_algorithms.get(name, {})
+        summary = self._format_algorithm_summary(source)
         summary_label = tk.Label(
             frame,
             text=summary,
@@ -1172,20 +1222,37 @@ class StockScreenerApp:
         frame = self.algorithm_previews.get(name)
         if not frame:
             return
-        summary = self._format_algorithm_summary(self.saved_algorithms.get(name, {}))
+        metadata = getattr(self, "saved_algorithm_blocks", {}).get(name)
+        source = metadata if metadata is not None else self.saved_algorithms.get(name, {})
+        summary = self._format_algorithm_summary(source)
         label = getattr(frame, "_summary_label", None)
         if label:
             label.config(text=summary)
 
-    def _format_algorithm_summary(self, params: dict) -> str:
-        parts = []
-        for i, (key, _value) in enumerate(params.items()):
+    def _format_algorithm_summary(self, params) -> str:
+        """Return a human readable summary for a saved algorithm.
+
+        ``params`` may be either a mapping of parameter keys to values or a
+        list of metadata dictionaries containing ``label``/``key`` pairs.  In
+        both cases only the first three block labels are included so that the
+        preview remains compact and focused on which filters are applied.
+        """
+
+        parts: list[str] = []
+
+        if isinstance(params, dict):
+            labels = [self.get_label_from_param_key(k) for k in params.keys()]
+        else:
+            labels = []
+            for block in params:
+                lbl = block.get("label") or self.get_label_from_param_key(block.get("key", ""))
+                labels.append(lbl)
+
+        for i, lbl in enumerate(labels):
             if i >= 3:
                 break
-            label = self.get_label_from_param_key(key)
-            # Only display the block's label, not the value, to keep the
-            # summary concise and focused on which filters are applied.
-            parts.append(label)
+            parts.append(lbl)
+
         return " || ".join(parts)
 
     def load_algorithm(self, name):
@@ -1193,12 +1260,22 @@ class StockScreenerApp:
         if not params:
             return
 
+        metadata = getattr(self, "saved_algorithm_blocks", {}).get(name)
+
         # Clear existing workspace
         self.clear_workspace()
 
-        for key, value in params.items():
-            label = self.get_label_from_param_key(key)
-            self.add_filter_block(label, value)
+        if metadata:
+            # Use stored metadata to restore blocks in the original order and
+            # with the exact values previously entered.
+            for block in metadata:
+                label = block.get("label") or self.get_label_from_param_key(block.get("key", ""))
+                value = block.get("value")
+                self.add_filter_block(label, value)
+        else:
+            for key, value in params.items():
+                label = self.get_label_from_param_key(key)
+                self.add_filter_block(label, value)
 
         self.reposition_snap_zone()
         self.update_display()
