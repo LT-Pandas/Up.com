@@ -741,6 +741,24 @@ class StockScreenerApp:
                         var.set(placeholder)
                         self.params.pop(key, None)
 
+                def on_keyrelease(event):
+                    """Filter combobox values based on user input."""
+                    typed = var.get().strip().lower()
+                    if not typed:
+                        combo["values"] = values_list
+                        return
+                    filtered = [opt for opt in options_str if typed in opt.lower()]
+                    combo["values"] = [placeholder] + filtered
+
+                def on_focus_in(event):
+                    if var.get() == placeholder:
+                        var.set("")
+
+                def on_focus_out(event):
+                    if not var.get():
+                        var.set(placeholder)
+                        self.params.pop(key, None)
+
                 combo.bind("<<ComboboxSelected>>", update_selection)
                 combo.bind("<Return>", update_selection)
                 combo.bind("<KeyRelease>", on_keyrelease)
