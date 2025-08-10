@@ -268,6 +268,16 @@ class StockDataService:
 
         params.setdefault("isActivelyTrading", True)
 
+        ipo_days = params.pop("ipoDays", None)
+        if ipo_days is not None:
+            try:
+                days = int(ipo_days)
+            except Exception:
+                days = 0
+            today = datetime.utcnow().date()
+            params["from"] = today.strftime("%Y-%m-%d")
+            params["to"] = (today + timedelta(days=days)).strftime("%Y-%m-%d")
+
         mvp_keys = {
             "rev_ttm_min",
             "yoy_rev_growth_pct_min",
@@ -304,6 +314,10 @@ class StockDataService:
 
         response = requests.get(url)
         data = response.json()
+        if isinstance(data, list):
+            for item in data:
+                if "name" not in item and "company" in item:
+                    item["name"] = item["company"]
         if "dividendMoreThan" in params:
             try:
                 threshold = float(params["dividendMoreThan"])
