@@ -41,11 +41,13 @@ def test_calculate_intraday_change():
     assert pct == pytest.approx(-5.0)
 
 
-def test_save_update_delete_algorithm():
+def test_save_and_delete_algorithm_clears_workspace():
     app = StockScreenerApp.__new__(StockScreenerApp)
     app.saved_algorithms = {}
     app.algorithm_previews = {}
     app.params = {"a": 1}
+    app.snap_order = []
+    app.current_algorithm = "Test"
 
     added = []
     destroyed = []
@@ -56,6 +58,13 @@ def test_save_update_delete_algorithm():
 
         def destroy(self):
             destroyed.append(self.n)
+
+    class DummyPlaceholder:
+        def __init__(self):
+            self.placed = False
+
+        def place(self, **kwargs):
+            self.placed = True
 
     def stub_add(name):
         added.append(name)
@@ -68,11 +77,16 @@ def test_save_update_delete_algorithm():
     assert added == ["Test"]
 
     app.params = {"a": 2}
-    app.save_algorithm("Test")
-    assert app.saved_algorithms["Test"] == {"a": 2}
-    assert added == ["Test"]  # no duplicate preview added
+    app.snap_order = [(1, DummyFrame("block"))]
+    app.snap_zone_placeholder = DummyPlaceholder()
+    app.reposition_snap_zone = lambda: None
+    app.update_display = lambda: None
 
     app.delete_algorithm("Test")
     assert "Test" not in app.saved_algorithms
     assert "Test" not in app.algorithm_previews
-    assert destroyed == ["Test"]
+    assert destroyed == ["Test", "block"]
+    assert app.snap_order == []
+    assert app.params == {}
+    assert app.snap_zone_placeholder.placed
+    assert app.current_algorithm is None

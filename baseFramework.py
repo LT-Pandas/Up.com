@@ -193,6 +193,8 @@ class StockScreenerApp:
         # Track preview widgets for each saved algorithm so they can be
         # updated or removed later.
         self.algorithm_previews = {}
+        # Name of the algorithm currently loaded in the editor, if any
+        self.current_algorithm = None
         self.backend = StockDataService(self.api_key, self.base_url, self.quote_url)
 
         self.setup_layout()
@@ -681,6 +683,16 @@ class StockScreenerApp:
 
         self.reposition_snap_zone()
 
+    def clear_workspace(self):
+        """Remove all filter blocks and reset parameters."""
+        for _, frame in self.snap_order:
+            frame.destroy()
+        self.snap_order.clear()
+        self.params.clear()
+        self.snap_zone_placeholder.place(relx=0.5, rely=0.5, anchor="center")
+        self.reposition_snap_zone()
+        self.update_display()
+
     def open_save_algorithm_dialog(self):
         if not self.params:
             messagebox.showinfo("Save Algorithm", "Add filters to the workspace first.")
@@ -721,6 +733,9 @@ class StockScreenerApp:
         frame = self.algorithm_previews.pop(name, None)
         if frame:
             frame.destroy()
+        if self.current_algorithm == name:
+            self.current_algorithm = None
+            self.clear_workspace()
 
     def open_delete_algorithm_dialog(self):
         if not self.saved_algorithms:
@@ -749,10 +764,25 @@ class StockScreenerApp:
     def _add_algorithm_preview(self, name):
         frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
         frame.pack_propagate(False)
-        tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white").pack(fill="both", expand=True)
+
+        label = tk.Label(frame, text=name, font=("Arial", 10, "bold"), bg="white")
+        label.pack(fill="both", expand=True, padx=(20, 0))
 
         frame._param_label = name
         DraggableBlock(master=self.left_frame, preview_block=frame, app=self, drop_target=self.block_area)
+
+        btn = tk.Button(
+            frame,
+            text="✖",
+            font=("Arial", 10, "bold"),
+            bg="white",
+            fg="#ff6b6b",
+            relief="flat",
+            command=lambda n=name: self.delete_algorithm(n),
+        )
+        btn.place(x=2, rely=0.5, anchor="w")
+        btn.lift()
+
         frame.pack(pady=4)
         self.algorithm_previews[name] = frame
 
@@ -761,11 +791,7 @@ class StockScreenerApp:
         if not params:
             return
 
-        # Clear existing workspace
-        for _, frame in self.snap_order:
-            frame.destroy()
-        self.snap_order.clear()
-        self.params.clear()
+        self.clear_workspace()
 
         for key, value in params.items():
             label = self.get_label_from_param_key(key)
@@ -773,6 +799,7 @@ class StockScreenerApp:
 
         self.reposition_snap_zone()
         self.update_display()
+        self.current_algorithm = name
 
     def open_dropdown(self, key, options):
         def submit_selection():
