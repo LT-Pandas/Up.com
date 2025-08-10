@@ -9,6 +9,7 @@ from baseFramework import (
     calculate_intraday_change,
 )
 import pytest
+from unittest.mock import MagicMock
 
 
 def test_get_param_key_from_label():
@@ -79,3 +80,30 @@ def test_save_update_delete_algorithm():
     assert "Test" not in app.algorithm_previews
     assert destroyed == ["Test"]
     assert app.current_algorithm is None
+
+
+def test_remove_filter_block_triggers_delayed_search():
+    """Removing a filter should schedule a search after one second."""
+    app = StockScreenerApp.__new__(StockScreenerApp)
+    app.params = {"a": 1}
+
+    class DummyFrame:
+        destroyed = False
+
+        def destroy(self):
+            self.destroyed = True
+
+    class DummyPlaceholder:
+        def place(self, **kwargs):
+            self.placed = True
+
+    frame = DummyFrame()
+    app.snap_order = [(1, frame)]
+    app.snap_zone_placeholder = DummyPlaceholder()
+    app.reposition_snap_zone = MagicMock()
+    app.delayed_search = MagicMock()
+
+    app.remove_filter_block(frame, "a")
+
+    assert "a" not in app.params
+    app.delayed_search.assert_called_once_with(1000)
