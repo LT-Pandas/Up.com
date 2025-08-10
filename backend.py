@@ -7,7 +7,7 @@ except Exception:  # pragma: no cover - optional dependency for tests
 
     requests = _RequestsStub()
 import concurrent.futures
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
 
 
@@ -245,51 +245,7 @@ class StockDataService:
     def search(self, params: dict) -> list:
         """Return a list of search results based on provided parameters."""
         params = dict(params)
-        if "ipoDays" in params:
-            try:
-                days = int(params.get("ipoDays", 0))
-            except Exception:
-                days = 0
-            start = datetime.utcnow().date()
-            end = start + timedelta(days=days)
-            url = (
-                f"{self.base_url}from={start:%Y-%m-%d}&to={end:%Y-%m-%d}&apikey={self.api_key}"
-            )
-            response = requests.get(url)
-            data = response.json()
-            return [
-                {
-                    "symbol": item.get("symbol"),
-                    "name": item.get("company"),
-                    "ipoDate": item.get("ipoDate"),
-                }
-                for item in data
-            ]
-
         params.setdefault("isActivelyTrading", True)
-
-        if "ipoDays" in params:
-            try:
-                days = int(params["ipoDays"])
-            except Exception:
-                return []
-            from datetime import timedelta
-
-            start = datetime.utcnow().date()
-            end = start + timedelta(days=days)
-
-            query = (
-                f"from={start:%Y-%m-%d}&to={end:%Y-%m-%d}&"
-                f"isActivelyTrading={str(params.get('isActivelyTrading')).lower()}&"
-                f"limit={params.get('limit', 20)}"
-            )
-            url = f"{self.base_url}{query}&apikey={self.api_key}"
-            response = requests.get(url)
-            data = response.json()
-            for item in data:
-                if "company" in item and "name" not in item:
-                    item["name"] = item["company"]
-            return data
 
         mvp_keys = {
             "rev_ttm_min",
