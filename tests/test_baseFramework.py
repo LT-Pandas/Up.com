@@ -46,6 +46,7 @@ def test_save_update_delete_algorithm():
     app.saved_algorithms = {}
     app.algorithm_previews = {}
     app.params = {"a": 1}
+    app.current_algorithm = None
 
     added = []
     destroyed = []
@@ -66,9 +67,10 @@ def test_save_update_delete_algorithm():
     app.save_algorithm("Test")
     assert app.saved_algorithms["Test"] == {"a": 1}
     assert added == ["Test"]
+    assert app.current_algorithm == "Test"
 
     app.params = {"a": 2}
-    app.save_algorithm("Test")
+    app.update_current_algorithm()
     assert app.saved_algorithms["Test"] == {"a": 2}
     assert added == ["Test"]  # no duplicate preview added
 
@@ -76,3 +78,4 @@ def test_save_update_delete_algorithm():
     assert "Test" not in app.saved_algorithms
     assert "Test" not in app.algorithm_previews
     assert destroyed == ["Test"]
+    assert app.current_algorithm is None
