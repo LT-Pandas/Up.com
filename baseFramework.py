@@ -285,14 +285,32 @@ class StockScreenerApp:
             ("Lower Volume", lambda: self.set_parameter("volumeMoreThan", float)),
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Lower Dividend", lambda: self.set_parameter("dividendMoreThan", float, 0.0)),
-            ("Limit Results", lambda: self.set_parameter("limit", int))
+            ("Limit Results", lambda: self.set_parameter("limit", int)),
+            # MVP Filters
+            ("Revenue (TTM) ≥", lambda: self.set_parameter("rev_ttm_min", float)),
+            ("YoY Revenue Growth ≥ (%)", lambda: self.set_parameter("yoy_rev_growth_pct_min", float)),
+            ("YoY Growth Count (≥ last 4q)", lambda: self.set_parameter("yoy_growth_quarter_count_min", float)),
+            ("Max QoQ Revenue Declines (last 4q)", lambda: self.set_parameter("max_qoq_rev_declines_last4", float)),
+            ("Gross Margin % ≥", lambda: self.set_parameter("gross_margin_pct_min", float)),
+            ("Δ Gross Margin YoY (pp) ≥", lambda: self.set_parameter("delta_gm_pp_yoy_min", float)),
+            ("Opex % Slope (last 4q) ≤", lambda: self.set_parameter("opex_pct_slope_last4_max", float)),
+            ("Operating CF (TTM) ≥", lambda: self.set_parameter("ocf_ttm_min", float)),
+            ("Δ Operating CF TTM YoY ≥", lambda: self.set_parameter("delta_ocf_ttm_yoy_min", float)),
+            ("R&D % of Revenue ≤", lambda: self.set_parameter("rd_pct_max", float)),
+            ("Δ R&D % YoY (pp) ≤", lambda: self.set_parameter("delta_rd_pct_pp_yoy_max", float)),
+            ("R&D Growth ≤ Revenue Growth (YoY)", lambda: self.open_dropdown("rd_growth_lte_rev_growth", FILTER_OPTIONS["rd_growth_lte_rev_growth"])),
+            ("Deferred Revenue Rising (YoY)", lambda: self.open_dropdown("deferred_rev_yoy_increase", FILTER_OPTIONS["deferred_rev_yoy_increase"])),
+            ("Cash Conversion Cycle Slope (last 4q) ≤", lambda: self.set_parameter("ccc_slope_last4_max", float)),
+            ("Rule of 40 (Growth + Op Margin) ≥", lambda: self.set_parameter("rule40_op_ttm_min", float)),
+            ("Capex % of Revenue ≤", lambda: self.set_parameter("capex_pct_max", float)),
         ]
 
         categories = {
             "Tools": [],
             "Drop Down Filters": [],
             "Write in Filters": [],
-            "Numeric Filters": []
+            "Numeric Filters": [],
+            "MVP Filters": [],
         }
 
         algo_btn = tk.Button(
@@ -317,6 +335,25 @@ class StockScreenerApp:
         self.algo_container = tk.Frame(self.block_scroll, bg="#f0f0f0")
         self.algo_container.pack(fill="x", padx=10)
 
+        mvp_keys = {
+            "rev_ttm_min",
+            "yoy_rev_growth_pct_min",
+            "yoy_growth_quarter_count_min",
+            "max_qoq_rev_declines_last4",
+            "gross_margin_pct_min",
+            "delta_gm_pp_yoy_min",
+            "opex_pct_slope_last4_max",
+            "ocf_ttm_min",
+            "delta_ocf_ttm_yoy_min",
+            "rd_pct_max",
+            "delta_rd_pct_pp_yoy_max",
+            "rd_growth_lte_rev_growth",
+            "deferred_rev_yoy_increase",
+            "ccc_slope_last4_max",
+            "rule40_op_ttm_min",
+            "capex_pct_max",
+        }
+
         for label, callback in filters:
             param_key = self.get_param_key_from_label(label)
             if param_key in ["stockSearch", "limit"]:
@@ -325,12 +362,14 @@ class StockScreenerApp:
                 categories["Drop Down Filters"].append((label, callback))
             elif param_key in ["marketCapMoreThan", "marketCapLowerThan"]:
                 categories["Write in Filters"].append((label, callback))
+            elif param_key in mvp_keys:
+                categories["MVP Filters"].append((label, callback))
             else:
                 categories["Numeric Filters"].append((label, callback))
 
 
 
-        for cat in ["Tools", "Drop Down Filters", "Write in Filters", "Numeric Filters"]:
+        for cat in ["Tools", "Drop Down Filters", "Write in Filters", "Numeric Filters", "MVP Filters"]:
             group = categories[cat]
             header = tk.Label(
                 self.block_scroll,
@@ -381,13 +420,24 @@ class StockScreenerApp:
         title_row.pack(fill="x", pady=(5, 0), padx=8)
         tk.Label(title_row, text=label, font=("Arial", 10, "bold"), bg="white").pack(side="left")
 
-        if base_key in FILTER_OPTIONS and FILTER_OPTIONS[base_key] is not None:
-            dropdown_row = tk.Frame(frame, bg="white")
-            dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
+        if base_key in FILTER_OPTIONS:
             options = FILTER_OPTIONS[base_key]
-            combo = ttk.Combobox(dropdown_row, values=options, font=("Arial", 10), state="disabled")
-            combo.set('') #combo.set(options[0])
-            combo.pack(side="left", fill="x", expand=True)
+            if isinstance(options, list):
+                dropdown_row = tk.Frame(frame, bg="white")
+                dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
+                combo = ttk.Combobox(dropdown_row, values=options, font=("Arial", 10), state="disabled")
+                combo.set('')
+                combo.pack(side="left", fill="x", expand=True)
+            elif isinstance(options, dict):
+                slider_row = tk.Frame(frame, bg="white")
+                slider_row.pack(fill="x", padx=10, pady=(2, 10))
+                val_entry = tk.Entry(slider_row, width=6, justify="center", relief="groove", font=("Arial", 10), state="disabled")
+                val_entry.insert(0, str(options.get('default', '')))
+                val_entry.pack(side="left", padx=(0, 10))
+                from_, to_, resolution = options.get('from', 0), options.get('to', 100), options.get('resolution', 1)
+                slider = tk.Scale(slider_row, from_=from_, to=to_, orient="horizontal", resolution=resolution, length=200, state="disabled")
+                slider.set(options.get('default', from_))
+                slider.pack(side="left", fill="x", expand=True)
 
         elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "limit", "dividend"]):
             if "marketcap" in base_key.lower():
@@ -467,25 +517,105 @@ class StockScreenerApp:
         )
         remove_button.pack(side="right")
 
-        if base_key in FILTER_OPTIONS and FILTER_OPTIONS[base_key] is not None:
-            dropdown_row = tk.Frame(block_frame, bg="white")
-            dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
+        if base_key in FILTER_OPTIONS:
+            options = FILTER_OPTIONS[base_key]
+            if isinstance(options, list):
+                dropdown_row = tk.Frame(block_frame, bg="white")
+                dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
 
-            combo = ttk.Combobox(dropdown_row, values=FILTER_OPTIONS[base_key], font=("Arial", 10), state="readonly")
-            combo.set(value if value is not None else "")
-            combo.pack(side="left", fill="x", expand=True)
+                default = value if value is not None else (options[0] if options else "")
+                combo = ttk.Combobox(dropdown_row, values=[str(o) for o in options], font=("Arial", 10), state="readonly")
+                combo.set(str(default))
+                combo.pack(side="left", fill="x", expand=True)
 
-            def update_selection(event):
-                selected = combo.get()
-                if selected:
-                    self.params[key] = selected
-                else:
-                    self.params.pop(key, None)
-                self.delayed_search()  # use this instead of update_display()
+                if default != "":
+                    self.params[key] = default
 
-            combo.bind("<<ComboboxSelected>>", update_selection)
-            if value is not None:
-                self.params[key] = value
+                def update_selection(event):
+                    selected = combo.get()
+                    if selected:
+                        try:
+                            idx = combo.current()
+                            self.params[key] = options[idx]
+                        except Exception:
+                            self.params[key] = selected
+                    else:
+                        self.params.pop(key, None)
+                    self.delayed_search()  # use this instead of update_display()
+
+                combo.bind("<<ComboboxSelected>>", update_selection)
+            elif isinstance(options, dict):
+                val_var = tk.StringVar(value="")
+                slider_row = tk.Frame(block_frame, bg="white")
+                slider_row.pack(fill="x", padx=10, pady=(2, 10))
+
+                val_entry = tk.Entry(
+                    slider_row,
+                    textvariable=val_var,
+                    width=6,
+                    justify="center",
+                    relief="groove",
+                    font=("Arial", 10),
+                )
+                val_entry.pack(side="left", padx=(0, 10))
+
+                from_, to_, resolution = options.get('from', 0), options.get('to', 100), options.get('resolution', 1)
+                default = value if value is not None else options.get('default', from_)
+
+                slider = tk.Scale(
+                    slider_row,
+                    from_=from_,
+                    to=to_,
+                    orient="horizontal",
+                    resolution=resolution,
+                    length=200,
+                )
+                slider.pack(side="left", fill="x", expand=True)
+
+                value_label = tk.Label(slider_row, text="", font=("Arial", 9), bg="white")
+                value_label.place(in_=slider, relx=0, y=-8, anchor="s")
+
+                def update_value_display(val):
+                    try:
+                        numeric = float(val)
+                    except ValueError:
+                        numeric = 0
+                    formatted = f"{numeric:,.2f}"
+                    value_label.config(text=formatted)
+                    ratio = (numeric - from_) / (to_ - from_)
+                    ratio = max(0, min(1, ratio))
+                    value_label.place(in_=slider, relx=ratio, y=-8, anchor="s")
+
+                def on_slider_move(val):
+                    val_var.set(f"{float(val):,.2f}")
+                    update_value_display(val)
+
+                def on_slider_release(event):
+                    try:
+                        val = float(slider.get())
+                        update_value_display(val)
+                        self.params[key] = val
+                        self.update_display()
+                    except ValueError:
+                        self.params.pop(key, None)
+
+                def on_entry_return(event):
+                    try:
+                        val = float(val_var.get().replace(',', ''))
+                        slider.set(val)
+                        self.params[key] = val
+                        self.update_display()
+                    except ValueError:
+                        self.params.pop(key, None)
+
+                slider.config(command=on_slider_move)
+                slider.bind("<ButtonRelease-1>", on_slider_release)
+                val_entry.bind("<Return>", on_entry_return)
+
+                slider.set(default)
+                val_var.set(f"{float(default):,.2f}")
+                update_value_display(default)
+                self.params[key] = default
 
         elif base_key == "stockSearch":
             search_row = tk.Frame(block_frame, bg="white")
