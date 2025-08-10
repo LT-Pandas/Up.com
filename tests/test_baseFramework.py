@@ -272,3 +272,31 @@ def test_drag_clone_preserves_algorithm_preview(monkeypatch):
 
     # Second child is the summary label with first three block names
     assert clone.children[1].cget("text") == "Block1 || Block2 || Block3"
+
+
+def test_remove_filter_block_delays_results_not_removal():
+    """Removing a filter block should delete immediately but delay results."""
+    app = StockScreenerApp.__new__(StockScreenerApp)
+
+    destroyed = []
+
+    class DummyFrame:
+        def destroy(self):
+            destroyed.append(True)
+
+    frame = DummyFrame()
+    app.params = {"k": 1}
+    app.snap_order = [(1, frame)]
+    app.snap_zone_placeholder = MagicMock()
+    app.reposition_snap_zone = MagicMock()
+    app.delayed_search = MagicMock()
+
+    app.remove_filter_block(frame, "k")
+
+    # Removal happens immediately
+    assert destroyed == [True]
+    assert app.snap_order == []
+    assert "k" not in app.params
+
+    # Search results are scheduled with a 0.5 second delay
+    app.delayed_search.assert_called_once_with(delay_ms=500)
