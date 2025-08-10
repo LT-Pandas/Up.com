@@ -7,6 +7,7 @@ from constants import (
     FILTER_OPTIONS,
     get_param_key_from_label as util_get_param_key_from_label,
     get_label_from_param_key as util_get_label_from_param_key,
+    get_preview_description as util_get_preview_description,
 )
 from backend import StockDataService
 from datetime import datetime
@@ -70,6 +71,93 @@ def calculate_intraday_change(price, previous_close) -> tuple[float, float]:
     else:
         percent = 0.0
     return change, percent
+
+
+class ToolTip:
+    """Lightweight tooltip that follows the cursor."""
+
+    # Track the currently displayed tooltip so only one is visible at a time
+    _active_tip = None
+
+    def __init__(self, widget, text: str):
+        self.widget = widget
+        self.text = text
+        self.tipwindow = None
+        widget.bind("<Enter>", self.show)
+        widget.bind("<Leave>", self.hide)
+        widget.bind("<Motion>", self.move)
+
+    def show(self, event=None):
+        if ToolTip._active_tip and ToolTip._active_tip is not self:
+            ToolTip._active_tip.hide()
+        if self.tipwindow or not self.text:
+            return
+        ToolTip._active_tip = self
+        self.tipwindow = tw = tk.Toplevel(self.widget)
+        tw.overrideredirect(True)
+        tw.attributes("-topmost", True)
+        label = tk.Label(
+            tw,
+            text=self.text,
+            background="#f6fbff",
+            relief="solid",
+            borderwidth=1,
+            font=("Arial", 9),
+            justify="left",
+            wraplength=250,
+        )
+        label.pack(ipadx=2)
+        self.move(event)
+
+    def move(self, event):
+        if not self.tipwindow:
+            return
+        x = (event.x_root if event else self.widget.winfo_pointerx()) + 12
+        y = (event.y_root if event else self.widget.winfo_pointery()) + 12
+        self.tipwindow.geometry(f"+{x}+{y}")
+
+    def hide(self, event=None, force: bool = False):
+        if not self.tipwindow:
+            return
+        if not force:
+            # Only hide if the cursor is truly outside the widget hierarchy
+            x, y = self.widget.winfo_pointerx(), self.widget.winfo_pointery()
+            target = self.widget.winfo_containing(x, y)
+            if target and self._is_descendant(target):
+                return
+
+        self.tipwindow.destroy()
+        self.tipwindow = None
+        if ToolTip._active_tip is self:
+            ToolTip._active_tip = None
+
+    @classmethod
+    def hide_active(cls, event=None):
+        """Hide the currently displayed tooltip, if any."""
+        if cls._active_tip:
+            cls._active_tip.hide(force=True)
+
+
+    def _is_descendant(self, target):
+        while target:
+            if target is self.widget:
+                return True
+            target = target.master
+        return False
+
+
+def add_tooltip(widget, text: str):
+    """Attach a single tooltip to *widget* and all of its children."""
+    tooltip = ToolTip(widget, text)
+
+    def bind_children(w):
+        for child in w.winfo_children():
+            child.bind("<Enter>", tooltip.show, add="+")
+            child.bind("<Leave>", tooltip.hide, add="+")
+            child.bind("<Motion>", tooltip.move, add="+")
+            bind_children(child)
+
+    bind_children(widget)
 
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
@@ -196,6 +284,9 @@ class StockScreenerApp:
         # Name of the algorithm currently loaded in the editor, if any
         self.current_algorithm = None
         self.backend = StockDataService(self.api_key, self.base_url, self.quote_url)
+        # Ensure tooltips vanish if the window loses focus or is minimized
+        self.root.bind("<FocusOut>", ToolTip.hide_active)
+        self.root.bind("<Unmap>", ToolTip.hide_active)
 
         self.setup_layout()
 
@@ -290,14 +381,32 @@ class StockScreenerApp:
             ("Lower Volume", lambda: self.set_parameter("volumeMoreThan", float)),
             ("Upper Volume", lambda: self.set_parameter("volumeLowerThan", float)),
             ("Lower Dividend", lambda: self.set_parameter("dividendMoreThan", float, 0.0)),
-            ("Limit Results", lambda: self.set_parameter("limit", int))
+            ("Limit Results", lambda: self.set_parameter("limit", int)),
+            # MVP Filters
+            ("Revenue (TTM) ≥", lambda: self.set_parameter("rev_ttm_min", float)),
+            ("YoY Revenue Growth ≥ (%)", lambda: self.set_parameter("yoy_rev_growth_pct_min", float)),
+            ("YoY Growth Count (≥ last 4q)", lambda: self.set_parameter("yoy_growth_quarter_count_min", float)),
+            ("Max QoQ Revenue Declines (last 4q)", lambda: self.set_parameter("max_qoq_rev_declines_last4", float)),
+            ("Gross Margin % ≥", lambda: self.set_parameter("gross_margin_pct_min", float)),
+            ("Δ Gross Margin YoY (pp) ≥", lambda: self.set_parameter("delta_gm_pp_yoy_min", float)),
+            ("Opex % Slope (last 4q) ≤", lambda: self.set_parameter("opex_pct_slope_last4_max", float)),
+            ("Operating CF (TTM) ≥", lambda: self.set_parameter("ocf_ttm_min", float)),
+            ("Δ Operating CF TTM YoY ≥", lambda: self.set_parameter("delta_ocf_ttm_yoy_min", float)),
+            ("R&D % of Revenue ≤", lambda: self.set_parameter("rd_pct_max", float)),
+            ("Δ R&D % YoY (pp) ≤", lambda: self.set_parameter("delta_rd_pct_pp_yoy_max", float)),
+            ("R&D Growth ≤ Revenue Growth (YoY)", lambda: self.open_dropdown("rd_growth_lte_rev_growth", FILTER_OPTIONS["rd_growth_lte_rev_growth"])),
+            ("Deferred Revenue Rising (YoY)", lambda: self.open_dropdown("deferred_rev_yoy_increase", FILTER_OPTIONS["deferred_rev_yoy_increase"])),
+            ("Cash Conversion Cycle Slope (last 4q) ≤", lambda: self.set_parameter("ccc_slope_last4_max", float)),
+            ("Rule of 40 (Growth + Op Margin) ≥", lambda: self.set_parameter("rule40_op_ttm_min", float)),
+            ("Capex % of Revenue ≤", lambda: self.set_parameter("capex_pct_max", float)),
         ]
 
         categories = {
             "Tools": [],
             "Drop Down Filters": [],
             "Write in Filters": [],
-            "Numeric Filters": []
+            "Numeric Filters": [],
+            "MVP Filters": [],
         }
 
         algo_btn = tk.Button(
@@ -309,14 +418,14 @@ class StockScreenerApp:
         )
         algo_btn.pack(padx=10, pady=(5, 5), fill="x")
 
-        del_btn = tk.Button(
+        update_btn = tk.Button(
             self.block_scroll,
-            text="− Delete Algorithm",
-            bg="#f8d7da", fg="#721c24",
+            text="↻ Update Algorithm",
+            bg="#d4edda", fg="#155724",
             font=("Arial", 10, "bold"),
-            command=self.open_delete_algorithm_dialog
+            command=self.update_current_algorithm,
         )
-        del_btn.pack(padx=10, pady=(0, 15), fill="x")
+        update_btn.pack(padx=10, pady=(0, 15), fill="x")
 
         self.algo_header = tk.Label(
             self.block_scroll,
@@ -331,6 +440,25 @@ class StockScreenerApp:
         self.algo_container = tk.Frame(self.block_scroll, bg="#f0f0f0")
         self.algo_container.pack(fill="x", padx=10)
 
+        mvp_keys = {
+            "rev_ttm_min",
+            "yoy_rev_growth_pct_min",
+            "yoy_growth_quarter_count_min",
+            "max_qoq_rev_declines_last4",
+            "gross_margin_pct_min",
+            "delta_gm_pp_yoy_min",
+            "opex_pct_slope_last4_max",
+            "ocf_ttm_min",
+            "delta_ocf_ttm_yoy_min",
+            "rd_pct_max",
+            "delta_rd_pct_pp_yoy_max",
+            "rd_growth_lte_rev_growth",
+            "deferred_rev_yoy_increase",
+            "ccc_slope_last4_max",
+            "rule40_op_ttm_min",
+            "capex_pct_max",
+        }
+
         for label, callback in filters:
             param_key = self.get_param_key_from_label(label)
             if param_key in ["stockSearch", "limit"]:
@@ -339,26 +467,42 @@ class StockScreenerApp:
                 categories["Drop Down Filters"].append((label, callback))
             elif param_key in ["marketCapMoreThan", "marketCapLowerThan"]:
                 categories["Write in Filters"].append((label, callback))
+            elif param_key in mvp_keys:
+                categories["MVP Filters"].append((label, callback))
             else:
                 categories["Numeric Filters"].append((label, callback))
 
 
 
-        for cat in ["Tools", "Drop Down Filters", "Write in Filters", "Numeric Filters"]:
+        for cat in ["Tools", "Drop Down Filters", "Write in Filters", "Numeric Filters", "MVP Filters"]:
             group = categories[cat]
-            header = tk.Label(
-                self.block_scroll,
+
+            header_frame = tk.Frame(self.block_scroll, bg="#d0d0d0")
+            header_frame.pack(fill="x", padx=10, pady=(10, 2))
+
+            header_label = tk.Label(
+                header_frame,
                 text=cat,
                 bg="#d0d0d0",
                 font=("Arial", 10, "bold"),
-                anchor="w",
-                width=37
+                anchor="w"
             )
-            header.pack(padx=10, pady=(10, 2))
+            header_label.pack(side="left", fill="x", expand=True)
+
+            toggle_btn = tk.Button(
+                header_frame,
+                text="▲",
+                bg="#d0d0d0",
+                relief="flat"
+            )
+            toggle_btn.pack(side="right")
+
+            group_frame = tk.Frame(self.block_scroll, bg="#f0f0f0")
+            group_frame.pack(fill="x", padx=10)
 
             for label, callback in group:
-                preview_block = self.create_filter_preview_block(label, self.block_scroll)
-                preview_block.pack(pady=3, padx=10)
+                preview_block = self.create_filter_preview_block(label, group_frame)
+                preview_block.pack(pady=3)
 
                 DraggableBlock(
                     master=self.left_frame,
@@ -366,6 +510,31 @@ class StockScreenerApp:
                     app=self,
                     drop_target=self.block_area
                 )
+
+            def toggle_group(btn=toggle_btn, frame=group_frame, header=header_frame):
+                """Show or hide the group's preview blocks.
+
+                When re-displaying a previously hidden group, ensure the
+                container is packed *after* its header so the blocks appear
+                directly beneath the correct title instead of collecting at
+                the end of the filter list."""
+
+                if frame.winfo_ismapped():
+                    frame.pack_forget()
+                    btn.config(text="▼")
+                else:
+                    # Re-pack the frame after its header to preserve layout
+                    frame.pack(fill="x", padx=10, after=header)
+                    btn.config(text="▲")
+
+            toggle_btn.config(command=toggle_group)
+
+            def on_header_click(event, btn=toggle_btn):
+                if event.widget is not btn:
+                    toggle_group()
+
+            header_frame.bind("<Button-1>", on_header_click)
+            header_label.bind("<Button-1>", on_header_click)
 
     def _on_results_mousewheel(self, event):
         self.results_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -395,13 +564,24 @@ class StockScreenerApp:
         title_row.pack(fill="x", pady=(5, 0), padx=8)
         tk.Label(title_row, text=label, font=("Arial", 10, "bold"), bg="white").pack(side="left")
 
-        if base_key in FILTER_OPTIONS and FILTER_OPTIONS[base_key] is not None:
-            dropdown_row = tk.Frame(frame, bg="white")
-            dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
+        if base_key in FILTER_OPTIONS:
             options = FILTER_OPTIONS[base_key]
-            combo = ttk.Combobox(dropdown_row, values=options, font=("Arial", 10), state="disabled")
-            combo.set('') #combo.set(options[0])
-            combo.pack(side="left", fill="x", expand=True)
+            if isinstance(options, list):
+                dropdown_row = tk.Frame(frame, bg="white")
+                dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
+                combo = ttk.Combobox(dropdown_row, values=options, font=("Arial", 10), state="disabled")
+                combo.set('')
+                combo.pack(side="left", fill="x", expand=True)
+            elif isinstance(options, dict):
+                slider_row = tk.Frame(frame, bg="white")
+                slider_row.pack(fill="x", padx=10, pady=(2, 10))
+                val_entry = tk.Entry(slider_row, width=6, justify="center", relief="groove", font=("Arial", 10), state="disabled")
+                val_entry.insert(0, str(options.get('default', '')))
+                val_entry.pack(side="left", padx=(0, 10))
+                from_, to_, resolution = options.get('from', 0), options.get('to', 100), options.get('resolution', 1)
+                slider = tk.Scale(slider_row, from_=from_, to=to_, orient="horizontal", resolution=resolution, length=200, state="disabled")
+                slider.set(options.get('default', from_))
+                slider.pack(side="left", fill="x", expand=True)
 
         elif any(term in base_key.lower() for term in ["price", "marketcap", "volume", "limit", "dividend"]):
             if "marketcap" in base_key.lower():
@@ -449,6 +629,10 @@ class StockScreenerApp:
 
         frame._title_row = title_row  # store reference
         frame._param_label = label  # used for dragging
+
+        desc = util_get_preview_description(label)
+        add_tooltip(frame, desc)
+
         return frame
 
     def add_filter_block(self, label, value=None):
@@ -476,30 +660,111 @@ class StockScreenerApp:
         tk.Label(title_row, text=label, font=("Arial", 10, "bold"), bg="white").pack(side="left")
 
         remove_button = tk.Button(
-            title_row, text="✖", font=("Arial", 10), fg="red", bg="white", relief="flat",
+            title_row, text="✖", font=("Arial", 10), fg="#ff6b6b", bg="white", relief="flat",
             command=lambda: self.remove_filter_block(block_frame, key)
         )
         remove_button.pack(side="right")
 
-        if base_key in FILTER_OPTIONS and FILTER_OPTIONS[base_key] is not None:
-            dropdown_row = tk.Frame(block_frame, bg="white")
-            dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
+        if base_key in FILTER_OPTIONS:
+            options = FILTER_OPTIONS[base_key]
+            if isinstance(options, list):
+                dropdown_row = tk.Frame(block_frame, bg="white")
+                dropdown_row.pack(fill="x", padx=10, pady=(5, 10))
 
-            combo = ttk.Combobox(dropdown_row, values=FILTER_OPTIONS[base_key], font=("Arial", 10), state="readonly")
-            combo.set(value if value is not None else "")
-            combo.pack(side="left", fill="x", expand=True)
+                default = value if value is not None else (options[0] if options else "")
+                combo = ttk.Combobox(dropdown_row, values=[str(o) for o in options], font=("Arial", 10), state="readonly")
+                combo.set(str(default))
 
-            def update_selection(event):
-                selected = combo.get()
-                if selected:
-                    self.params[key] = selected
-                else:
-                    self.params.pop(key, None)
-                self.delayed_search()  # use this instead of update_display()
+                combo.pack(side="left", fill="x", expand=True)
 
-            combo.bind("<<ComboboxSelected>>", update_selection)
-            if value is not None:
-                self.params[key] = value
+                if default != "":
+                    self.params[key] = default
+
+                def update_selection(event):
+                    selected = combo.get()
+                    if selected:
+                        try:
+                            idx = combo.current()
+                            self.params[key] = options[idx]
+                        except Exception:
+                            self.params[key] = selected
+                    else:
+                        self.params.pop(key, None)
+                    self.delayed_search()  # use this instead of update_display()
+
+                combo.bind("<<ComboboxSelected>>", update_selection)
+            elif isinstance(options, dict):
+                val_var = tk.StringVar(value="")
+                slider_row = tk.Frame(block_frame, bg="white")
+                slider_row.pack(fill="x", padx=10, pady=(2, 10))
+
+                val_entry = tk.Entry(
+                    slider_row,
+                    textvariable=val_var,
+                    width=6,
+                    justify="center",
+                    relief="groove",
+                    font=("Arial", 10),
+                )
+                val_entry.pack(side="left", padx=(0, 10))
+
+                from_, to_, resolution = options.get('from', 0), options.get('to', 100), options.get('resolution', 1)
+                default = value if value is not None else options.get('default', from_)
+
+                slider = tk.Scale(
+                    slider_row,
+                    from_=from_,
+                    to=to_,
+                    orient="horizontal",
+                    resolution=resolution,
+                    length=200,
+                )
+                slider.pack(side="left", fill="x", expand=True)
+
+                value_label = tk.Label(slider_row, text="", font=("Arial", 9), bg="white")
+                value_label.place(in_=slider, relx=0, y=-8, anchor="s")
+
+                def update_value_display(val):
+                    try:
+                        numeric = float(val)
+                    except ValueError:
+                        numeric = 0
+                    formatted = f"{numeric:,.2f}"
+                    value_label.config(text=formatted)
+                    ratio = (numeric - from_) / (to_ - from_)
+                    ratio = max(0, min(1, ratio))
+                    value_label.place(in_=slider, relx=ratio, y=-8, anchor="s")
+
+                def on_slider_move(val):
+                    val_var.set(f"{float(val):,.2f}")
+                    update_value_display(val)
+
+                def on_slider_release(event):
+                    try:
+                        val = float(slider.get())
+                        update_value_display(val)
+                        self.params[key] = val
+                        self.update_display()
+                    except ValueError:
+                        self.params.pop(key, None)
+
+                def on_entry_return(event):
+                    try:
+                        val = float(val_var.get().replace(',', ''))
+                        slider.set(val)
+                        self.params[key] = val
+                        self.update_display()
+                    except ValueError:
+                        self.params.pop(key, None)
+
+                slider.config(command=on_slider_move)
+                slider.bind("<ButtonRelease-1>", on_slider_release)
+                val_entry.bind("<Return>", on_entry_return)
+
+                slider.set(default)
+                val_var.set(f"{float(default):,.2f}")
+                update_value_display(default)
+                self.params[key] = default
 
         elif base_key == "stockSearch":
             search_row = tk.Frame(block_frame, bg="white")
@@ -724,6 +989,7 @@ class StockScreenerApp:
         duplicates.
         """
         self.saved_algorithms[name] = dict(self.params)
+        self.current_algorithm = name
         if name not in self.algorithm_previews:
             self._add_algorithm_preview(name)
 
@@ -741,25 +1007,7 @@ class StockScreenerApp:
         if not self.saved_algorithms:
             messagebox.showinfo("Delete Algorithm", "No saved algorithms to delete.")
             return
-
-        top = Toplevel(self.root)
-        top.title("Delete Algorithm")
-        top.geometry("300x200")
-
-        listbox = tk.Listbox(top)
-        for name in self.saved_algorithms:
-            listbox.insert(tk.END, name)
-        listbox.pack(padx=10, pady=10, fill="both", expand=True)
-
-        def delete_selected():
-            selection = listbox.curselection()
-            if not selection:
-                return
-            name = listbox.get(selection[0])
-            self.delete_algorithm(name)
-            top.destroy()
-
-        tk.Button(top, text="Delete", command=delete_selected).pack(pady=5)
+        self.save_algorithm(self.current_algorithm)
 
     def _add_algorithm_preview(self, name):
         frame = tk.Frame(self.algo_container, bg="white", relief="solid", bd=1, width=300, height=50)
@@ -782,6 +1030,7 @@ class StockScreenerApp:
         )
         btn.place(x=2, rely=0.5, anchor="w")
         btn.lift()
+
 
         frame.pack(pady=4)
         self.algorithm_previews[name] = frame
@@ -890,7 +1139,7 @@ class StockScreenerApp:
         self.result_tiles[symbol] = frame
 
         # Remove button
-        remove_btn = tk.Button(frame, text="✖", font=("Arial", 10), fg="red", bg="white", relief="flat",
+        remove_btn = tk.Button(frame, text="✖", font=("Arial", 10), fg="#ff6b6b", bg="white", relief="flat",
             command=lambda: self.remove_stock_tile(symbol))
         remove_btn.place(relx=1.0, x=-16, y=4, anchor="ne")
 
@@ -932,13 +1181,21 @@ class StockScreenerApp:
         toggle_btn = tk.Button(bottom_row, text="▼", font=("Arial", 10), bg="white", relief="flat")
         toggle_btn.pack(side="right")
         toggle_btn.config(command=lambda b=toggle_btn: toggle_dropdown(b))
-        # Allow clicking anywhere on the stock tile to toggle the dropdown,
-        # excluding the remove and toggle buttons to avoid accidental double toggles
+
+        # Allow clicking anywhere on the stock tile (including its child widgets)
+        # to toggle the dropdown.  Bind recursively so clicks on labels or other
+        # widgets also trigger the handler, while skipping the remove and toggle
+        # buttons to prevent duplicate toggles.
         def on_tile_click(event, btn=toggle_btn):
             if event.widget not in (btn, remove_btn):
                 toggle_dropdown(btn)
 
-        frame.bind("<Button-1>", on_tile_click)
+        def bind_widget_tree(widget):
+            widget.bind("<Button-1>", on_tile_click, add="+")
+            for child in widget.winfo_children():
+                bind_widget_tree(child)
+
+        bind_widget_tree(frame)
     
     def remove_stock_tile(self, symbol):
         frame = self.result_tiles.pop(symbol, None)

@@ -9,6 +9,7 @@ from baseFramework import (
     calculate_intraday_change,
 )
 import pytest
+from unittest.mock import MagicMock
 
 
 def test_get_param_key_from_label():
@@ -49,6 +50,7 @@ def test_save_and_delete_algorithm_clears_workspace():
     app.snap_order = []
     app.current_algorithm = "Test"
 
+
     added = []
     destroyed = []
 
@@ -75,6 +77,7 @@ def test_save_and_delete_algorithm_clears_workspace():
     app.save_algorithm("Test")
     assert app.saved_algorithms["Test"] == {"a": 1}
     assert added == ["Test"]
+    assert app.current_algorithm == "Test"
 
     app.params = {"a": 2}
     app.snap_order = [(1, DummyFrame("block"))]
@@ -90,3 +93,4 @@ def test_save_and_delete_algorithm_clears_workspace():
     assert app.params == {}
     assert app.snap_zone_placeholder.placed
     assert app.current_algorithm is None
+
