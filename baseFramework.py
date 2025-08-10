@@ -7,6 +7,7 @@ from constants import (
     FILTER_OPTIONS,
     get_param_key_from_label as util_get_param_key_from_label,
     get_label_from_param_key as util_get_label_from_param_key,
+    get_preview_description as util_get_preview_description,
 )
 from backend import StockDataService
 from datetime import datetime
@@ -70,6 +71,84 @@ def calculate_intraday_change(price, previous_close) -> tuple[float, float]:
     else:
         percent = 0.0
     return change, percent
+
+
+class ToolTip:
+    """Lightweight tooltip that follows the cursor."""
+
+    # Track the currently displayed tooltip so only one is visible at a time
+    _active_tip = None
+
+    def __init__(self, widget, text: str):
+        self.widget = widget
+        self.text = text
+        self.tipwindow = None
+        widget.bind("<Enter>", self.show)
+        widget.bind("<Leave>", self.hide)
+        widget.bind("<Motion>", self.move)
+
+    def show(self, event=None):
+        if ToolTip._active_tip and ToolTip._active_tip is not self:
+            ToolTip._active_tip.hide()
+        if self.tipwindow or not self.text:
+            return
+        ToolTip._active_tip = self
+        self.tipwindow = tw = tk.Toplevel(self.widget)
+        tw.overrideredirect(True)
+        tw.attributes("-topmost", True)
+        label = tk.Label(
+            tw,
+            text=self.text,
+            background="#89CFF0",
+            relief="solid",
+            borderwidth=1,
+            font=("Arial", 9),
+            justify="left",
+            wraplength=250,
+        )
+        label.pack(ipadx=2)
+        self.move(event)
+
+    def move(self, event):
+        if not self.tipwindow:
+            return
+        x = (event.x_root if event else self.widget.winfo_pointerx()) + 12
+        y = (event.y_root if event else self.widget.winfo_pointery()) + 12
+        self.tipwindow.geometry(f"+{x}+{y}")
+
+    def hide(self, event=None):
+        if not self.tipwindow:
+            return
+        # Only hide if the cursor is truly outside the widget hierarchy
+        x, y = self.widget.winfo_pointerx(), self.widget.winfo_pointery()
+        target = self.widget.winfo_containing(x, y)
+        if target and self._is_descendant(target):
+            return
+        self.tipwindow.destroy()
+        self.tipwindow = None
+        if ToolTip._active_tip is self:
+            ToolTip._active_tip = None
+
+    def _is_descendant(self, target):
+        while target:
+            if target is self.widget:
+                return True
+            target = target.master
+        return False
+
+
+def add_tooltip(widget, text: str):
+    """Attach a single tooltip to *widget* and all of its children."""
+    tooltip = ToolTip(widget, text)
+
+    def bind_children(w):
+        for child in w.winfo_children():
+            child.bind("<Enter>", tooltip.show, add="+")
+            child.bind("<Leave>", tooltip.hide, add="+")
+            child.bind("<Motion>", tooltip.move, add="+")
+            bind_children(child)
+
+    bind_children(widget)
 
 class DraggableBlock(tk.Frame):
     def __init__(self, master, preview_block, app, drop_target):
@@ -538,6 +617,10 @@ class StockScreenerApp:
 
         frame._title_row = title_row  # store reference
         frame._param_label = label  # used for dragging
+
+        desc = util_get_preview_description(label)
+        add_tooltip(frame, desc)
+
         return frame
 
     def add_filter_block(self, label, value=None):
