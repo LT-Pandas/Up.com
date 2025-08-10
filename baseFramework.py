@@ -171,10 +171,11 @@ class DraggableBlock(tk.Frame):
 
     def bind_all_children(self, widget):
         # Recursively bind all children to forward drag events
-        widget.bind("<ButtonPress-1>", self.start_drag, add="+")
-        widget.bind("<B1-Motion>", self.do_drag, add="+")
-        widget.bind("<ButtonRelease-1>", self.stop_drag, add="+")
-        
+        if not isinstance(widget, tk.Button):
+            widget.bind("<ButtonPress-1>", self.start_drag, add="+")
+            widget.bind("<B1-Motion>", self.do_drag, add="+")
+            widget.bind("<ButtonRelease-1>", self.stop_drag, add="+")
+
         for child in widget.winfo_children():
             self.bind_all_children(child)
 
