@@ -711,6 +711,8 @@ class StockScreenerApp:
 
                 options_str = [str(o) for o in options]
                 placeholder = "Select option"
+                values_list = [placeholder] + options_str
+
                 if value is not None:
                     var = tk.StringVar(value=str(value))
                     self.params[key] = value
@@ -719,8 +721,9 @@ class StockScreenerApp:
                 combo = ttk.Combobox(
                     dropdown_row,
                     textvariable=var,
-                    values=options_str,
+                    values=values_list,
                     font=("Arial", 10),
+                    state="readonly",
                 )
 
                 combo.pack(side="left", fill="x", expand=True)
@@ -735,26 +738,7 @@ class StockScreenerApp:
                             self.params[key] = selected
                         self.delayed_search()
                     else:
-                        self.params.pop(key, None)
-
-                def on_keyrelease(event):
-                    value = var.get()
-                    if value == placeholder:
-                        combo.configure(values=options_str)
-                        return
-                    filtered = [o for o in options_str if value.lower() in o.lower()]
-                    combo.configure(values=filtered if filtered else options_str)
-                    if event.keysym == "Return":
-                        update_selection()
-
-                def on_focus_in(event):
-                    if var.get() == placeholder:
-                        var.set("")
-
-                def on_focus_out(event):
-                    if not var.get():
                         var.set(placeholder)
-                        combo.configure(values=options_str)
                         self.params.pop(key, None)
 
                 combo.bind("<<ComboboxSelected>>", update_selection)
