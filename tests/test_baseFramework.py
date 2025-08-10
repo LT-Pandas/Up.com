@@ -9,6 +9,7 @@ from baseFramework import (
     calculate_intraday_change,
 )
 import pytest
+from unittest.mock import MagicMock
 
 
 def test_get_param_key_from_label():
