@@ -116,18 +116,27 @@ class ToolTip:
         y = (event.y_root if event else self.widget.winfo_pointery()) + 12
         self.tipwindow.geometry(f"+{x}+{y}")
 
-    def hide(self, event=None):
+    def hide(self, event=None, force: bool = False):
         if not self.tipwindow:
             return
-        # Only hide if the cursor is truly outside the widget hierarchy
-        x, y = self.widget.winfo_pointerx(), self.widget.winfo_pointery()
-        target = self.widget.winfo_containing(x, y)
-        if target and self._is_descendant(target):
-            return
+        if not force:
+            # Only hide if the cursor is truly outside the widget hierarchy
+            x, y = self.widget.winfo_pointerx(), self.widget.winfo_pointery()
+            target = self.widget.winfo_containing(x, y)
+            if target and self._is_descendant(target):
+                return
+
         self.tipwindow.destroy()
         self.tipwindow = None
         if ToolTip._active_tip is self:
             ToolTip._active_tip = None
+
+    @classmethod
+    def hide_active(cls, event=None):
+        """Hide the currently displayed tooltip, if any."""
+        if cls._active_tip:
+            cls._active_tip.hide(force=True)
+
 
     def _is_descendant(self, target):
         while target:
@@ -275,6 +284,9 @@ class StockScreenerApp:
         # Name of the algorithm currently loaded in the editor, if any
         self.current_algorithm = None
         self.backend = StockDataService(self.api_key, self.base_url, self.quote_url)
+        # Ensure tooltips vanish if the window loses focus or is minimized
+        self.root.bind("<FocusOut>", ToolTip.hide_active)
+        self.root.bind("<Unmap>", ToolTip.hide_active)
 
         self.setup_layout()
 
