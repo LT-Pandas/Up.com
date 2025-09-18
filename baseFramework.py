@@ -301,7 +301,7 @@ class StockScreenerApp:
         self.root.title("Block-Based Stock Screener")
         self.root.geometry("1300x750")
 
-        self.api_key = 'ilp96LS93HjMQOCCyXwbt5UmOKf5da16'
+        self.api_key = 'YOUR_API_HERE'
         self.base_url = 'https://financialmodelingprep.com/api/v3/stock-screener?'
         self.quote_url = 'https://financialmodelingprep.com/api/v3/quote/'
         self.params = {}
